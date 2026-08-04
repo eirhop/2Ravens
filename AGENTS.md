@@ -19,9 +19,13 @@ The long-term goal is to make understanding software dramatically easier in the 
 ## Repository rules
 
 - 2Ravens is private pre-v1 software. Prefer a clean breaking change over deprecation; remove stale code and docs.
+- Keep README.md thin. Focus on documentation in /docs. Do not duplicate same documentation multiple places.
 
 ## Verification
 Use credo, dialyxir and sobelow
+
+- Keep command output compact. Capture noisy verification output in a temporary log; on success, report one concise line per command, and on failure, show only the relevant tail or diagnostic excerpt.
+
 ```bash
 mix format
 mix compile --warnings-as-errors

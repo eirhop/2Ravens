@@ -32,5 +32,5 @@ See the full vision:
 
 ## Status
 
-🚧 Early design and research.
+Early design and research.
 
