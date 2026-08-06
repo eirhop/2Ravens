@@ -91,11 +91,15 @@ max_nodes_per_hop: positive integer
 max_total_nodes: positive integer
 
 relations:
+- defines
 - calls
+- invokes_macro
+- expands_to
 - dataflows_to
 - sends
 - handles
 - implements
+- uses
 - supervises
 - tested_by
 - reads
