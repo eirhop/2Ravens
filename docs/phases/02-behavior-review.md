@@ -6,8 +6,9 @@ Planned. Product development begins after Phase 1 passes its exit criteria.
 
 ## Product promise
 
-Show a reviewer what a code change does and what it can affect before requiring
-them to read every line of the diff.
+Compare the possible execution graph before and after a code change so a
+reviewer can see what behavior may have changed before reading every line of
+the diff.
 
 The product should help a reviewer answer:
 
@@ -25,10 +26,10 @@ AI can create changes faster than humans can build a mental model of them. A
 diff shows edited text, but it does not directly show the behavioral role of
 that text or its effect on the surrounding system.
 
-Phase 2 turns the Phase 1 evidence graph into a human approval surface. Its
-value is faster orientation, better identification of missing tests and
-unintended dependencies, and greater confidence when reviewing unfamiliar or
-AI-generated changes.
+Phase 2 turns the Phase 1 repository graph and execution envelope into a human
+approval surface. Its value is faster orientation, better identification of
+missing tests and unintended dependencies, and greater confidence when
+reviewing unfamiliar or AI-generated changes.
 
 ## Target user
 
@@ -39,8 +40,8 @@ required to validate the core review workflow.
 ## Primary workflow
 
 1. Open a working-tree change or commit.
-2. See a concise summary of changed entry points and likely affected behavior.
-3. Inspect important upstream and downstream flows.
+2. See the focus nodes changed by the diff and their combined execution graph.
+3. Inspect added, removed, or changed upstream and downstream paths.
 4. Inspect changed clauses, guards, and boundaries.
 5. Inspect tests, observed paths, and missing evidence.
 6. Drill into exact source and the original diff where needed.
@@ -62,6 +63,10 @@ reviewers from inspecting the underlying diff.
 This model should support changes to nodes, relationships, clauses, and
 evidence—not only changed files.
 
+For each perspective, 2Ravens should be able to construct the same execution
+envelope. Review compares the possible paths, argument mappings, conditions,
+messages, effects, and tests between those envelopes.
+
 ### Review projection
 
 For one change, the UI should present:
@@ -70,11 +75,17 @@ For one change, the UI should present:
 - Important affected flows
 - Added, removed, or changed relationships
 - Clause and guard changes
+- Argument and result-flow changes
 - Side effects and boundary crossings
+- Message send and handler changes
 - Relevant tests and examples
 - Uncovered or weakly supported paths
 - Freshness, provenance, and uncertainty
 - Source and diff drill-down
+
+When a change contains several focus functions, the review projection should
+merge common callers, dependencies, tests, effects, documentation, and source.
+Shared information appears once with its relevant focus nodes attached.
 
 The first version should show one curated projection. A configurable graph
 workbench is not required.
@@ -90,7 +101,8 @@ workbench is not required.
 - Behavior observed at runtime
 
 When evidence supports only potential impact, the UI must say “may affect” or
-equivalent language.
+equivalent language. A static execution envelope describes what could happen;
+it does not claim that any path happened.
 
 ### Progressive disclosure
 
@@ -119,14 +131,17 @@ should be collapsed until requested.
 
 - Compare base and changed graph perspectives.
 - Identify changed symbols, relationships, clauses, and evidence.
-- Rank affected flows using the context work from Phase 1.
+- Compare execution envelopes for the changed focus nodes.
+- Merge shared paths for multi-function changes.
+- Identify changed entry-point, effect, message, and test paths.
 
 ### 3. Minimal review UI
 
 - Open one local change.
-- Show the concise change summary and affected-flow projection.
+- Show the changed execution-envelope projection.
 - Support test, evidence, source, and diff drill-down.
 - Support copying the selected context.
+- Run without a hosted service or network dependency.
 
 ### 4. Review validation
 
@@ -163,6 +178,7 @@ the quality of the human approval decision.
 - Attractive visualizations can create false confidence in incomplete facts.
 - Transitive dependency graphs can overwhelm rather than clarify.
 - Static analysis may describe possible impact as actual runtime behavior.
+- Shared generic helpers may obscure the meaningful common paths.
 - Generated summaries may hide the evidence a reviewer needs to challenge.
 - Reviewers may trust the tool instead of inspecting disclosed uncertainty.
 
@@ -190,6 +206,7 @@ behavior and impact questions for representative changes:
 - With equal or better accuracy
 - Without treating inferred impact as confirmed behavior
 - With clear access to tests, uncertainty, source, and the original diff
+- With shared multi-focus context merged rather than repeated
 - With measurable improvement in finding important risks or missing evidence
 
 Passing this gate demonstrates that the static graph supports human

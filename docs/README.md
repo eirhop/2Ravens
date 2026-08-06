@@ -6,9 +6,11 @@ Start with these documents:
   destination.
 - [Product plan](PRODUCT.md) explains how the three product phases form one
   coherent path.
+- [Context query](QUERY.md) defines how an AI explores the graph through one
+  flexible operation.
 - [Roadmap](ROADMAP.md) records the order of work and the gate between phases.
-- [Architecture](ARCHITECTURE.md) records the shared technical principles and
-  current architectural direction.
+- [Architecture](ARCHITECTURE.md) defines the local graph, execution envelope,
+  evidence model, and current technical direction.
 
 Each product phase has its own plan:
 
@@ -20,10 +22,12 @@ Each product phase has its own plan:
 
 - `VISION.md` owns the enduring problem, destination, and principles.
 - `PRODUCT.md` owns the product strategy and relationship between phases.
-- `phases/` owns the user promise, scope, validation, and exit criteria for
-  each phase.
+- `QUERY.md` owns the public context-query contract and usage scenarios.
+- `phases/` owns the promise, scope, validation, and exit criteria for each
+  phase.
 - `ROADMAP.md` owns sequencing and current status.
-- `ARCHITECTURE.md` owns shared technical constraints and accepted direction.
+- `ARCHITECTURE.md` owns graph semantics, evidence, algorithms, and shared
+  technical constraints.
 
-Implementation decisions that require evidence should remain open until the
-relevant phase produces that evidence.
+Implementation decisions that require evidence remain open until the relevant
+phase produces that evidence.

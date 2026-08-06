@@ -4,129 +4,156 @@
 
 AI is making software faster to produce, but not easier to understand.
 
-As codebases grow and change more quickly, the bottleneck moves from writing
-code to answering questions such as:
+An agent working in an unfamiliar repository may need many searches, file
+reads, caller lookups, test inspections, and runtime checks before it can make
+one safe change. A human reviewing that work repeats much of the same
+reconstruction.
 
-- What behavior changed?
-- Which execution flows are affected?
-- Which OTP processes participate?
-- What state can change?
-- Which tests provide evidence for the behavior?
-- What remains uncertain?
+The difficult questions are behavioral:
 
-Current tools make people and AI reconstruct those answers from files, text
-searches, diffs, logs, and process inspection. That work is slow, repetitive,
-and easy to get wrong.
+- How can execution reach this code?
+- What can this code call or affect?
+- Which clauses and guards control the paths?
+- How do values move between functions?
+- Which OTP processes and messages participate?
+- Which tests exercise the possible paths?
+- What changed, and what remains uncertain?
+
+Files, diffs, logs, and text search expose pieces of the answer. They do not
+provide the execution map.
 
 ## The vision
 
-2Ravens is an understanding layer for Elixir and OTP systems.
+2Ravens is a local understanding layer for Elixir and OTP systems.
 
-It builds a semantic evidence graph from source code, compiler information,
-tests, Git, and scoped runtime observations. It then presents task-oriented
-answers and views rather than exposing the complete graph.
+It parses a repository into a graph of statically knowable structure and
+behavior: applications, modules, functions, clauses, patterns, guards, calls,
+argument flow, tests, processes, messages, state, and effects.
 
-The graph is not the product. The product is faster, more trustworthy
-understanding.
+An agent or human can then request the smallest graph slice that answers the
+current question instead of reconstructing that slice manually.
 
-Source files remain available as the deepest level of evidence, but users
-should be able to begin with behavior, execution flow, state ownership, tests,
-and architecture.
+The graph is not a claim that every Elixir relationship is statically
+knowable. Dynamic calls, generated code, protocol dispatch, and process
+destinations must remain visible as possible or unresolved relationships.
 
-## The product path
+## One model across three phases
 
-2Ravens reaches the vision through three sequential phases.
+The product follows one coherent progression:
+
+```text
+Phase 1: What could happen?
+         Possible execution graph
+
+Phase 2: What possibilities changed?
+         Before-and-after execution graphs
+
+Phase 3: What actually happened?
+         Observed trace over the possible graph
+```
 
 ### Phase 1 — AI context
 
-Give an AI agent the smallest trustworthy context needed to complete a task.
-The agent should spend less time searching the repository and be less likely to
-miss important callers, tests, boundaries, or side effects.
+Build the repository graph once. Let an AI explore it through one flexible,
+deterministic context query that can begin at a repository, application,
+module, function, change, test, keyword result, or several focus nodes.
+
+The target outcome is to replace many manual exploration operations with one to
+three graph queries without reducing correctness.
 
 ### Phase 2 — Behavior-first review
 
-Help a human understand what a code change does and what it can affect before
-reading every line of the diff. Review should move from changed behavior to
-affected flows, evidence, uncertainty, and finally source.
+Compare the possible execution graph before and after a change. A reviewer
+should see changed paths, clauses, messages, effects, tests, and uncertainty
+before reading every implementation detail.
 
 ### Phase 3 — Runtime understanding
 
-Help a human explore an unfamiliar OTP system and explain a concrete execution
-or failure. Static relationships and observed runtime events should form one
-grounded account of functions, processes, messages, state transitions, errors,
-and supervisor responses.
+Capture one bounded local execution and overlay the observed path on the
+possible graph. A developer should be able to follow functions, processes,
+messages, state transitions, errors, and supervisor responses.
 
-Each phase must be useful on its own and must prove the foundation needed by the
-next phase.
+Each phase must be useful on its own and must prove the foundation required by
+the next.
 
 ## Core principles
 
+### Local and private by default
+
+Every core capability must run on the developer's machine after installation.
+2Ravens requires no account, API key, hosted service, cloud model, embedding
+model, or external database. Network integrations may be optional adapters but
+must never be required for the complete local workflow.
+
+### Derive rather than annotate
+
+2Ravens should derive relationships from source, compiler evidence, tests,
+Git, and runtime observations. Codebases should not need 2Ravens-specific
+annotations or duplicated declarations that can become stale.
+
+Ordinary `@moduledoc`, `@doc`, typespecs, behaviours, tests, and architecture
+documents enrich graph nodes because they are already useful parts of an
+Elixir system.
+
+### The agent understands the task
+
+The coding agent already interprets the user's request. It supplies explicit
+focus nodes and traversal needs. 2Ravens supplies deterministic repository
+facts; it does not reinterpret free-text tasks with another model.
+
 ### Authority remains outside 2Ravens
 
-Source code, tests, Git, and runtime events are authoritative. The graph is a
-derived, disposable projection that can be rebuilt.
+Source and Git define the implementation and revision. Tests and runtime events
+provide behavioral evidence. The graph is a derived, disposable projection
+that can be rebuilt.
 
-### Evidence must be visible
+### Evidence and uncertainty are visible
 
-Every relationship must identify where it came from. Source-derived,
-compiler-confirmed, test-observed, runtime-observed, and inferred relationships
-must not be presented as equivalent.
+Source-derived, compiler-confirmed, test-observed, runtime-observed, possible,
+and unresolved relationships must not be presented as equivalent. Unknown
+behavior remains unknown.
 
-### Uncertainty is part of the answer
+### Query behavior, not files
 
-Elixir permits macros, dynamic dispatch, generated code, and asynchronous
-behavior. 2Ravens must show incomplete, stale, unresolved, or inferred
-information instead of hiding it.
-
-### Start with the user's question
-
-Raw graphs quickly become overwhelming. 2Ravens should return opinionated
-projections for a task, change, behavior, process, or debugging session.
+Raw graph neighborhoods quickly become overwhelming. Queries should follow
+meaningful paths from entry points to focus nodes, from focus nodes to effects,
+from senders to message handlers, and from tests to exercised code.
 
 ### Use progressive disclosure
 
-Begin with a concise explanation. Let the user move through behavior, flows,
-processes, functions, clauses, tests, runtime evidence, and source only as far
-as needed.
+An agent or human may begin with a shallow module view, continue with a function
+execution envelope, and finally inspect one clause or uncertain path. Source is
+materialized only for selected nodes and never duplicated unnecessarily.
 
-### Human and AI understanding share one foundation
+### Measure real improvement
 
-The MCP response, review UI, runtime explorer, and copied context should be
-different views over the same evidence model.
-
-### Runtime observation is scoped and safe
-
-Tracing must be explicit, bounded, and development/test-oriented by default.
-2Ravens must disclose uncertainty, sensitive-value handling, and the risk that
-observation changes timing.
-
-### Product value must be measured
-
-Every phase must improve a real task. A sophisticated graph that does not make
-agents or humans more effective is not success.
+The product succeeds only when agents or humans complete real work faster or
+more accurately. Graph size and technical sophistication are not product
+outcomes.
 
 ## Hugin and Munin
 
 The project uses two conceptual names:
 
-- **Munin — memory:** indexing, synchronization, evidence, provenance, and graph
-  retrieval.
-- **Hugin — thought:** context selection, explanation, MCP, visualization, and
-  human workflows.
+- **Munin — memory:** parsing, compiler reconciliation, synchronization,
+  provenance, and repository-graph storage.
+- **Hugin — thought:** graph slicing, execution envelopes, MCP, visualization,
+  review, and debugging workflows.
 
 They describe responsibilities. They should become separate applications only
 if implementation experience demonstrates a useful boundary.
 
 ## Long-term destination
 
-An AI should be able to request grounded repository context without rebuilding
-the architecture through repeated searches.
+An AI should be able to request the relevant execution slice instead of
+spending many steps reconstructing callers, dependencies, tests, and effects.
 
-A reviewer should be able to understand the behavioral effect of a change
-before reading its implementation in detail.
+A reviewer should be able to see how the possible behavior changed before
+reading the complete diff.
 
-A developer should be able to perform one action, follow it through an OTP
-system, inspect relevant state changes, and explain why the result occurred.
+A developer should be able to see the actual runtime path highlighted inside
+the set of paths that could have happened.
 
 2Ravens succeeds when understanding an Elixir system becomes closer to
-navigating a map than assembling a story from disconnected files and logs.
+navigating an execution map than assembling a story from disconnected files
+and logs.

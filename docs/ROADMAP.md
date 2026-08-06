@@ -2,39 +2,44 @@
 
 ## Planning rule
 
-2Ravens has three product phases. Each phase must deliver a useful workflow and
-pass an evidence-based gate before product development moves to the next.
+2Ravens has three product phases built on one graph:
 
-Research may look ahead when it reduces a known risk, but it must not turn into
-building later-phase infrastructure before the current product promise is
-validated.
+```text
+Phase 1: possible execution
+Phase 2: changed possibilities
+Phase 3: observed execution
+```
+
+Each phase must deliver a useful workflow and pass an evidence-based gate
+before product development moves to the next.
 
 ## Current status
 
-**Product definition and Phase 1 preparation**
+**Product definition and Phase 1 technical validation**
 
-The repository currently contains the product vision and plans. The immediate
-work is to finish the Phase 1 contract and benchmark before selecting broad
-architecture or building a product shell.
+The immediate work is to prove that a real Elixir repository can become a
+useful local function, dataflow, and OTP graph before building a product shell
+or selecting broad infrastructure.
 
-## Preparation — product contract and benchmark
+## Preparation — contract and benchmark
 
 This is preparation for Phase 1, not a separate product phase.
 
 Deliverables:
 
 - Accepted three-phase product plan
-- Example `get_change_context` inputs and complete expected outputs
-- A benchmark set of representative Elixir changes and tasks
-- Human-reviewed reference context for each benchmark task
-- A reproducible baseline of agent work without 2Ravens
-- Focused technical spikes for source ranges, function calls, tests, and
-  compiler evidence
+- Accepted [context-query contract](QUERY.md)
+- Representative single-focus and multi-focus scenarios
+- Hand-written expected graph slices for those scenarios
+- A reproducible baseline of agent exploration without 2Ravens
+- Focused spikes for functions, clauses, argument flow, macros, tests, and one
+  GenServer message path
+- An offline acceptance requirement for every core workflow
 
 Exit condition:
 
-- The first product workflow and its evaluation can be implemented without
-  inventing the user contract during development.
+- The first graph and query can be implemented without inventing the product
+  contract during development.
 
 ## Phase 1 — AI context
 
@@ -42,22 +47,26 @@ Exit condition:
 
 Goal:
 
-> Given one changed Elixir function and a task, return the smallest trustworthy
-> context needed to make a correct change.
+> Replace substantial manual repository exploration with one to three local,
+> deterministic graph queries.
 
 Milestones:
 
-1. Benchmark and context contract
-2. Static extraction of the facts required by the benchmark
-3. Task-aware change-context projection
-4. One MCP tool and one basic visual explanation
-5. Evaluation on real agent tasks
+1. Query contract and benchmark
+2. Complete function and clause supergraph for the benchmark repository
+3. Call-site argument mapping and bounded execution envelope
+4. Macro, test, and static OTP relationships
+5. Flexible single-focus and multi-focus graph slicing
+6. `mix ravens`, one local MCP `context` tool, and a basic graph view
+7. Comparative agent evaluation
 
 Gate:
 
 - Agents complete representative work at least as correctly as the baseline.
-- Repository exploration and context cost are materially reduced.
-- Provenance, freshness, omissions, and uncertainty are inspectable.
+- Manual exploration operations and context duplication are materially reduced.
+- Possible paths, unresolved relationships, freshness, and traversal limits are
+  inspectable.
+- The complete workflow runs offline without credentials.
 
 ## Phase 2 — Behavior-first review
 
@@ -65,23 +74,25 @@ Gate:
 
 Goal:
 
-> Explain what a change does and what it can affect before the reviewer reads
-> every line of the diff.
+> Compare the possible execution graph before and after a change so a reviewer
+> can see what behavior may have changed.
 
 Milestones:
 
 1. Review contract and evidence language
-2. Before-and-after graph projection
-3. Minimal local change-review UI
-4. Comparative review evaluation
-5. Commit, branch, and optional pull-request integration
+2. Base and working repository graphs
+3. Before-and-after execution-envelope comparison
+4. Minimal local change-review UI
+5. Comparative review evaluation
+6. Optional commit, branch, and pull-request integrations
 
 Gate:
 
 - Reviewers answer important impact questions faster and with equal or better
   accuracy than the baseline workflow.
-- The UI does not present inferred impact as confirmed behavior.
-- Tests, uncertainty, source, and the original diff remain inspectable.
+- Shared context for multi-function changes is merged rather than repeated.
+- Possible, confirmed, observed, and unresolved behavior remain distinct.
+- Tests, source, uncertainty, and the original diff remain inspectable.
 
 ## Phase 3 — Runtime understanding
 
@@ -89,29 +100,31 @@ Gate:
 
 Goal:
 
-> Make an unfamiliar Elixir system explorable and make one concrete execution
-> or failure explainable.
+> Overlay one bounded observed execution on the possible graph and explain what
+> actually happened.
 
 Milestones:
 
 1. Static OTP system explorer
 2. Bounded ExUnit capture
 3. Attached local development capture
-4. Timeline, replay, and grounded explanation
-5. Comparative exploration and debugging evaluation
+4. Observed-path overlay on the execution envelope
+5. Timeline, replay, and grounded explanation
+6. Comparative exploration and debugging evaluation
 
 Gate:
 
 - An unfamiliar developer can identify the processes and state owners involved
   in a behavior.
-- A bounded interaction can be captured and explained through functions,
-  messages, state transitions, errors, and supervisor responses.
+- A bounded local interaction can be followed through functions, messages,
+  state transitions, errors, and supervisor responses.
+- The actual path is visible within the possible paths.
 - Runtime observations and inferred causality remain clearly distinguished.
 
 ## Later opportunities
 
 These ideas are outside the initial three-phase commitment and require separate
-validation:
+validation while preserving local operation:
 
 - Historical graph comparisons
 - Architecture boundary rules
@@ -122,21 +135,24 @@ validation:
 - Static-versus-runtime drift
 - Distributed BEAM and cross-node message flow
 - Production-safe sampled observation
-- Semantic or vector-assisted ranking
 - Architecture documentation generation
 - Hot-code-upgrade visualization
 
 ## Immediate next milestone
 
-Before implementing the index:
+Build a technical spike that proves one complete execution slice:
 
-1. Select the initial benchmark repository and representative tasks.
-2. Write the expected context package for one changed Elixir function by hand.
-3. Define the evidence and freshness fields in that package.
-4. Record the baseline agent workflow for the same task.
-5. Run only the technical spikes needed to reproduce that package from source
-   and compiler evidence.
+1. Select a small real Elixir repository and one representative function.
+2. Parse every function and clause in the repository.
+3. Resolve explicit local and remote calls.
+4. Record call-site argument mappings and branch conditions.
+5. Connect relevant tests.
+6. Connect one GenServer message send to its handler clause.
+7. Query upstream paths to meaningful entry points.
+8. Query downstream paths to effects or application boundaries.
+9. Return the minimal subgraph with exact source, uncertainty, and frontier.
+10. Repeat with two focus functions and deduplicate their shared context.
 
-The first implementation milestone is complete when the hand-written package
-can be produced automatically through one MCP tool and inspected as one basic
-graph.
+The milestone passes when `mix ravens` can reproduce the hand-written expected
+slice locally and deterministically. MCP is added after this core contract is
+stable.

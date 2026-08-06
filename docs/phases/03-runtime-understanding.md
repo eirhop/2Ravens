@@ -7,9 +7,9 @@ workflows have proved useful.
 
 ## Product promise
 
-Make an unfamiliar Elixir system explorable and make one concrete execution or
-failure explainable through functions, OTP processes, messages, state, and
-supervision.
+Make an unfamiliar Elixir system explorable and overlay one concrete execution
+or failure on the possible graph so it is explainable through functions, OTP
+processes, messages, state, and supervision.
 
 ## Why this is valuable
 
@@ -19,8 +19,8 @@ lifecycle, or supervisor responses.
 
 Developers currently reconstruct that behavior from source, logs, traces,
 process inspection, and prior knowledge. Phase 3 combines those observations
-with the static graph so a human can see both the intended structure and what
-actually occurred.
+with the possible execution graph so a human can see both what could have
+happened and what actually occurred.
 
 This supports two related jobs:
 
@@ -38,7 +38,7 @@ higher security and operational bar.
 ### Explore a system
 
 1. Search for a behavior, function, process, message, or application.
-2. See the relevant static flow and OTP relationships.
+2. See the relevant possible execution envelope and OTP relationships.
 3. Identify supervisors, processes, callbacks, messages, and state owners.
 4. Follow relationships into tests, runtime examples, and source.
 5. Copy the selected system context.
@@ -47,7 +47,8 @@ higher security and operational bar.
 
 1. Select a narrow capture scope.
 2. Perform one application action or run one test.
-3. See the resulting function and process timeline.
+3. See the observed function and process path highlighted inside the possible
+   execution envelope.
 4. Inspect messages and relevant state transitions.
 5. Inspect exceptions, process exits, and supervisor responses.
 6. Overlay observed events on the static graph.
@@ -104,6 +105,21 @@ A session may record:
 Captured values must be normalized, bounded, and redacted before storage or
 display.
 
+### Possible-versus-observed overlay
+
+Observed events attach to the same function, clause, call-site, message,
+process, state, and effect nodes used by the static graph.
+
+The UI should distinguish:
+
+- Possible and unobserved paths
+- The observed path
+- Static relationships contradicted or unresolved by the observation
+- Runtime events with no resolved static node
+
+An observed path confirms that one execution occurred. It does not prove that
+unobserved paths are impossible.
+
 ### Timeline and replay
 
 A recorded session should be replayable event by event. The graph, process
@@ -150,6 +166,7 @@ The UI must never present temporal proximity alone as proven causation.
 ### 4. Timeline and explanation
 
 - Replay the captured session event by event.
+- Highlight the observed path inside the possible execution envelope.
 - Generate a grounded explanation linked to evidence.
 - Copy the complete debugging context for a human or AI.
 
@@ -168,6 +185,7 @@ timing of the system being observed.
 Phase 3 therefore requires:
 
 - Development and test use by default
+- Complete local operation without an account, API key, or hosted collector
 - Explicit attachment and capture start
 - Local binding and authentication by default
 - Bounded sessions, queues, values, and source scopes
@@ -230,10 +248,11 @@ can:
 - Identify the important processes, messages, and state owners for a behavior.
 - Capture one bounded development or test interaction.
 - Follow its function, process, message, and state timeline.
+- See the actual path inside the possible paths.
 - Explain a real failure and supervisor response from inspectable evidence.
 - Distinguish confirmed observations from inferred causality.
 - Export the complete relevant context for another human or AI.
 
 Passing this gate realizes the initial full product path. Production-safe
-observation, distributed systems, architecture rules, and advanced semantic
-ranking remain separate opportunities that require their own validation.
+observation, distributed systems, and architecture rules remain separate
+opportunities that require their own validation.

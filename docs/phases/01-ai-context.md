@@ -6,238 +6,294 @@ Planned. This is the active product phase.
 
 ## Product promise
 
-Given a repository change and a task, return the smallest trustworthy context
-an AI agent needs to make a correct change.
+Replace substantial manual repository exploration with one to three precise,
+deterministic graph queries.
 
-The first complete workflow is deliberately narrow:
-
-> Given one changed Elixir function, return its clauses, important callers,
-> important callees, relevant tests, application boundaries, exact source
-> ranges, and any uncertainty.
+An AI agent should be able to begin broadly at a repository or module, narrowly
+at a function or test, or jointly at several focus nodes. It should receive the
+possible paths, dependencies, tests, effects, source, and uncertainty required
+to continue its task.
 
 ## Why this is valuable
 
-AI agents currently reconstruct repository context through repeated searches,
-file reads, and guesses about relationships. This consumes tokens and time, and
-it can omit dependencies that are not obvious from text search.
+A capable coding agent typically performs a repeated sequence:
 
-Phase 1 should reduce that exploration while making the basis for the returned
-context inspectable. It also proves whether the evidence graph is accurate and
-useful enough to support the later human products.
+1. Find an initial symbol.
+2. Read its contract and clauses.
+3. Search for callers and entry points.
+4. Follow calls to effects and boundaries.
+5. Trace arguments, branches, messages, and state.
+6. Find tests and analogous behavior.
+7. Repeat searches when the first hypothesis is incomplete.
 
-## Target user
+Phase 1 builds that repository map ahead of time and makes it directly
+queryable. The agent retains responsibility for understanding the user's task
+and deciding what to explore.
 
-The initial user is an AI coding agent working in a local Elixir repository.
-The human supervising the agent is a secondary user who needs to inspect why
-particular context was selected.
+## Product boundary
 
-## Primary workflow
+2Ravens does not accept open-ended task prose and does not use embeddings,
+learned rerankers, or cloud models to guess relevance.
 
-1. 2Ravens indexes the relevant repository revision and working tree.
-2. The agent supplies a changed function or diff, a task description, and a
-   token budget.
-3. 2Ravens retrieves and ranks relevant graph facts.
-4. Exact source is materialized from the current files.
-5. The agent receives structured context with freshness and uncertainty.
-6. The agent can request a focused expansion when the first package is
-   insufficient.
-
-The primary interface is:
+The agent calls one operation with structured parameters:
 
 ```text
-get_change_context(
-  target,
-  task,
-  token_budget
+context(
+  focus,
+  traversal,
+  include,
+  constraints,
+  limit
 )
 ```
 
-The first version should prefer one useful tool over a broad family of shallow
-tools. Additional symbol, flow, test, or architecture queries should be added
-only when evaluation shows that focused follow-up is needed.
+See [Context query](../QUERY.md) for the complete contract and usage scenarios.
 
-## Context contract
+## Primary workflow
 
-A response should contain:
+1. 2Ravens indexes the complete statically knowable repository graph.
+2. The agent converts its understanding of the task into focus and traversal.
+3. 2Ravens resolves the focus and constructs the requested graph slice.
+4. Optional input constraints prune impossible clauses and branches.
+5. Exact source is materialized once for selected nodes.
+6. The response discloses evidence, freshness, ambiguity, and unexpanded scope.
+7. The agent may continue from a returned node ID using the same operation.
 
-- A concise summary of the selected context
-- Repository revision and index freshness
-- Changed modules, functions, and clauses
-- Important upstream callers
-- Important downstream calls and side effects
-- Relevant behaviours, callbacks, and application boundaries
-- Relevant tests and documented examples
-- Exact source locations and selected source
-- Provenance and confidence for relationships
-- Unresolved dynamic relationships and other uncertainty
-- Reasons that the most important items were selected
+An exact function may require one query. A vague issue may require a shallow
+keyword or module query followed by a focused execution-envelope query. A
+dynamic or ambiguous path may require one additional expansion.
 
-The response may omit low-value graph nodes, but it must not hide known gaps in
-the evidence.
+## First complete vertical slice
+
+Given one Elixir function, return:
+
+- Its module, documentation, typespec, clauses, patterns, and guards
+- Explicit local and remote callees
+- Call-site argument and result mappings
+- Direct callers
+- Paths from meaningful entry points to the function
+- Paths from the function to effects or application boundaries
+- Relevant tests
+- Static OTP message relationships where present
+- Exact source ranges and selected source
+- Candidate or unresolved dynamic relationships
+- Index freshness and unexpanded frontier
+
+Optional abstract input constraints should narrow the possible clauses and
+branches without executing arbitrary application code.
 
 ## Required capabilities
 
-### Repository facts
+### Complete statically knowable graph
 
-The initial graph should model only facts needed by the first workflow:
+Parse every repository source file and index:
 
-- Applications and source files
-- Modules
-- Functions and function clauses
-- Patterns and guards where they affect clause identity
-- Explicit local and remote calls
-- Behaviours and callbacks
-- Tests and doctests
-- Documentation and typespec references
-- Source ranges
+- Applications, files, modules, functions, macros, and clauses
+- Patterns, guards, and branches
+- Explicit local, remote, and imported calls
+- Call sites and argument/result mappings
+- Behaviours, callbacks, protocols, structs, and types
+- Tests, doctests, ordinary documentation, and typespecs
 - Git base and working-tree changes
+- Source ranges and revision identity
 
-Macros, generated code, imports, protocols, configuration, process messages,
-and supervision relationships should be added when they materially improve the
-benchmark rather than merely expanding the schema.
+The graph should terminate external dependencies at explicit boundaries until
+there is evidence that dependency source must be indexed.
 
-### Evidence and freshness
+### Macro and compiler reconciliation
 
-The first implementation must distinguish:
+Preserve macro invocation relationships and compiler-generated relationships.
+Use compiler evidence to confirm or enrich the source graph without making
+successful compilation a prerequisite for indexing.
 
-- Source-derived probable relationships
-- Compiler-confirmed relationships
-- Unresolved or inferred relationships
+### Static OTP relationships
 
-If later test execution adds observed relationships, they must remain distinct
-from static references to test code.
+Resolve common GenServer calls, casts, sends, message patterns, callbacks,
+supervisors, and registered process identities. Map sent values to handler
+patterns when possible. Ambiguous process destinations remain visible.
 
-Each response must disclose which files were indexed, which compiler evidence
-is current, and whether changed files are incomplete or stale.
+### Execution envelope
 
-### Context selection
+Starting from one or more focus nodes, follow every path compatible with known
+patterns, guards, branches, abstract inputs, and traversal limits.
 
-Candidate facts should be ranked using evidence such as:
+Return function calls, message paths, effects, return shapes, and exceptions
+when statically knowable. Unknown expressions preserve every compatible path.
 
-- Direct relevance to the changed symbol and task
-- Graph distance
-- Public entry-point importance
-- Application or process boundary crossings
-- Side effects
-- Test evidence
-- Documentation
-- Token cost
+### Multi-focus graph slicing
 
-The ranking does not need to be sophisticated initially. It needs to be
-deterministic, explainable, and measurable.
+For several focus nodes:
 
-### Inspectable graph
+- Find common upstream and downstream relationships.
+- Find meaningful paths connecting the focus nodes.
+- Merge shared nodes and path segments.
+- Materialize shared source, documentation, and tests once.
+- Separate shared and focus-specific context.
+- Return disconnected components honestly when no meaningful connection exists.
 
-The phase includes one basic visual graph for inspecting the context package.
-Its purpose is to explain and debug selection, not to deliver the full review
-experience planned for Phase 2.
+### Local keyword discovery
+
+Support deterministic lexical matching over names, identifiers, docs,
+typespecs, tests, paths, and source. Return candidate anchors and ambiguity; do
+not infer task intent.
+
+### Progressive expansion
+
+Every bounded query returns an unexpanded frontier. The agent can continue from
+returned node IDs through the same `context` operation. No separate search,
+expand, test, or architecture tools are required initially.
+
+## Interfaces
+
+The domain API is transport-independent:
+
+```text
+Mix task:   mix ravens
+MCP server: two_ravens
+MCP tool:   context
+```
+
+Implement the Mix task first for development, diagnostics, and benchmarks.
+After the contract stabilizes, add a thin local STDIO MCP adapter as the
+preferred agent surface. The server may remain alive and keep the graph warm.
 
 ## Delivery milestones
 
-### 1. Benchmark and contract
+### 1. Query contract and benchmark
 
-- Select representative changes from a substantial Elixir repository.
-- Record the functions, tests, boundaries, and source required for each task.
-- Capture baseline agent behavior without 2Ravens.
-- Define example MCP responses before implementing the index.
+- Select representative repository-understanding scenarios.
+- Record the agent's existing searches, file reads, and commands.
+- Hand-write the expected graph slice for each scenario.
+- Define expected nodes, paths, exclusions, uncertainty, and frontier.
 
-### 2. Static extraction
+### 2. Function and clause supergraph
 
-- Parse one valid Elixir repository.
-- Produce stable nodes, relationships, and source ranges.
-- Combine source-derived and compiler-derived evidence without losing
-  provenance.
-- Represent a changed function and its immediate context.
+- Parse every function and clause in a small real repository.
+- Resolve explicit local and remote calls.
+- Retain stable identities, exact call sites, and source ranges.
+- Query callers and callees in both directions.
 
-### 3. Context projection
+### 3. Control and dataflow
 
-- Accept one changed function and task.
-- Rank callers, callees, tests, and boundaries.
-- Materialize exact source within a token budget.
-- Report freshness, omissions, and uncertainty.
+- Record clause patterns, guards, and branch conditions.
+- Map caller expressions to callee arguments.
+- Map call results into bindings and pattern matches.
+- Construct one bounded input-sensitive execution envelope.
 
-### 4. MCP and visual explanation
+### 4. Macros, tests, and OTP
 
-- Expose `get_change_context` through MCP.
-- Return structured Markdown and JSON.
-- Render the selected context as a basic graph.
+- Connect macro invocations to compiler-expanded relationships.
+- Connect tests statically to the code they reference.
+- Connect one GenServer message send to its handler clause.
+- Represent unresolved dynamic relationships explicitly.
 
-### 5. Product evaluation
+### 5. Flexible context query
 
-- Run the benchmark with and without 2Ravens.
-- Inspect missed dependencies and irrelevant context.
-- Improve extraction and ranking only where the evidence identifies a problem.
+- Support repository, module, function, test, change, keyword, and node-ID
+  focus.
+- Support traversal direction, relationship types, stopping points, and limits.
+- Support multiple focus nodes with combined deduplicated output.
+- Materialize exact source and return frontier information.
+
+### 6. Mix and MCP adapters
+
+- Expose the contract through `mix ravens`.
+- Return stable JSON and structured Markdown.
+- Expose the same contract through one local MCP `context` tool.
+- Render the selected graph as a basic diagnostic visualization.
+
+### 7. Product evaluation
+
+- Run representative coding tasks with and without 2Ravens.
+- Compare correctness, exploration operations, context cost, and omissions.
+- Improve graph extraction or query semantics only where evidence identifies a
+  problem.
 
 ## Initial implementation direction
 
-The simplest credible implementation should be preferred:
-
-- One Mix application, with conceptual module boundaries inside it
-- Elixir parsing plus compiler or `mix xref` evidence
+- One Mix application
+- Elixir-native parsing for valid source
+- Compiler reconciliation for confirmed and generated relationships
+- In-memory or ETS-backed graph structures before persistent storage
 - Explicit indexing before continuous file watching
-- In-memory or ETS-backed graph structures before a graph database
-- A small MCP adapter over a testable context API
-- A simple generated graph rather than a production UI
+- Deterministic path and set operations rather than learned ranking
+- No codebase-specific annotations
+- No network access, credentials, models, or external database
+- Small fixture repositories plus a substantial real benchmark repository
 
-For temporarily invalid files, the first version may return the last valid
-fragment with explicit stale status. A tolerant parser is a later decision if
-real tasks demonstrate that this is insufficient.
+For invalid files, retain the last valid fragment with explicit stale status
+until a benchmark demonstrates the need for tolerant parsing.
 
-## Validation
+## Validation scenarios
 
-Use representative tasks from a substantial Elixir codebase, initially Favn.
-For each task, define a human-reviewed reference set of important symbols,
-tests, boundaries, and source.
+The initial benchmark should include:
 
-Compare agents with and without 2Ravens using:
+- Orient in an unfamiliar repository.
+- Inspect a module one hop in both directions.
+- Understand the possible execution from a known function.
+- Narrow an execution envelope with input constraints.
+- Resolve a vague issue through local keyword discovery and a second query.
+- Find callers and tests before a public API refactor.
+- Combine several changed functions without duplicating shared context.
+- Follow a GenServer message to its handler.
+- Follow a function to persistence or another side-effect boundary.
+- Inspect a macro-generated relationship and its uncertainty.
+
+Measure:
 
 - Task correctness
-- Important-context recall
-- Irrelevant context and total input tokens
-- Repository exploration calls
+- Important-node and important-path recall
+- Irrelevant nodes and source
+- Repository exploration operations
+- Total context size
 - Time to the first correct edit
-- Missed dependencies
-- Incorrect assumptions
-- Follow-up context requests
+- Missed dependencies and incorrect assumptions
+- Follow-up graph queries
 
-Numerical targets should be set after measuring a reproducible baseline. The
+Numerical targets should be set after recording a reproducible baseline. The
 tool must improve efficiency without degrading correctness.
 
 ## Risks
 
-- Macros and dynamic dispatch can make a static call graph incomplete.
-- A large graph can still produce poor context if ranking is weak.
-- Stale working-tree facts can create convincing but incorrect answers.
-- Generated behavior summaries can overstate what static evidence proves.
-- Optimizing only for fewer tokens can remove context needed for correctness.
+- Macros and dynamic dispatch can make static relationships incomplete.
+- Raw fixed-hop neighborhoods can explode around common helpers.
+- Abstract execution can suffer path explosion or imprecise unknown values.
+- Stale graph facts can create convincing but incorrect source context.
+- Multi-focus queries can over-prioritize generic shared utilities.
+- Aggressive output limits can hide required context.
 
-These risks are reasons to expose evidence and benchmark the complete workflow,
-not reasons to broaden the initial scope.
+The response must disclose unresolved edges, analysis limits, disconnected
+components, and the unexpanded frontier.
 
 ## Non-goals
 
 Phase 1 does not include:
 
+- Free-text task interpretation
+- Embeddings, vector search, or learned reranking
+- 2Ravens-specific code annotations
 - A production review UI
-- A general repository explorer
-- Test execution and runtime capture
 - Runtime tracing or state capture
 - Manual function execution
 - Continuous production observation
-- Semantic or vector search unless the baseline demonstrates a need
-- A commitment to a particular persistent graph database
+- A general-purpose graph query language
+- A commitment to a persistent graph database
 
 ## Exit criteria
 
 Phase 1 is complete when:
 
-- `get_change_context` supports the complete changed-function workflow.
-- Returned relationships have inspectable provenance, confidence, and
+- The statically knowable repository graph supports the agreed benchmark.
+- One `context` operation supports broad-to-narrow progressive exploration.
+- Single-focus and multi-focus results preserve paths and deduplicate shared
+  context.
+- Optional input constraints narrow a possible execution envelope.
+- Relationships have inspectable provenance, confidence, revision, and
   freshness.
-- Agents complete representative tasks at least as correctly as the baseline.
-- Repository exploration and context cost are materially reduced.
-- Important omissions and uncertain relationships are visible.
-- The same projection can be rendered as a basic graph.
+- Important omissions, unresolved edges, and traversal limits are visible.
+- Agents complete representative tasks at least as correctly as the baseline
+  with materially less manual exploration.
+- The complete workflow works locally without network access or credentials.
 
-Passing this gate demonstrates that the semantic graph is useful enough to
-support a human review product.
+Passing this gate demonstrates that the graph can support the human review
+product.
