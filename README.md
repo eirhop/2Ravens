@@ -1,36 +1,42 @@
 # 2Ravens
 
-> Graph-based code understanding and runtime visualization for Elixir, OTP and AI.
+> Trusted code context and runtime understanding for Elixir, OTP, humans, and AI.
 
-2Ravens is an experimental developer tool that helps humans and AI understand Elixir systems through code graphs, execution flows, process state, and runtime visualization.
+2Ravens is an experimental developer tool that builds a semantic evidence graph
+of an Elixir repository. It uses that graph to help AI agents retrieve precise
+context, help humans review behavior changes, and eventually make OTP systems
+easier to explore and debug.
 
-Instead of navigating files, logs, and grep results, 2Ravens builds a semantic graph of your application so both humans and AI can quickly understand:
+The product is planned in three phases:
 
-- What changed
-- What behavior is affected
-- How data flows through the system
-- Which OTP processes participate
-- What state changes
-- Which tests cover the behavior
-- What context an AI actually needs
+1. **AI context** — return the smallest trustworthy context needed for a task.
+2. **Behavior-first review** — show humans what changed and what it affects.
+3. **Runtime understanding** — make systems explorable and debugging sessions
+   explainable.
 
-## Vision
+Source code and Git remain authoritative. Tests and observed runtime events
+provide behavioral evidence. 2Ravens is a regenerable understanding layer over
+those sources.
 
-The long-term goal is to make understanding software dramatically easier in the AI era, where humans review and reason about systems that are increasingly written by AI.
+## Documentation
 
-See the full vision:
-
+- [Documentation index](docs/README.md)
 - [Vision](docs/VISION.md)
+- [Product plan](docs/PRODUCT.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Architecture](docs/ARCHITECTURE.md)
 
-## Planned architecture
+## Concepts
 
-```
+```text
 2Ravens
-├── Hugin   # Thought — reasoning, MCP, visualization
-└── Munin   # Memory — graph index and synchronization
+├── Munin   # Memory — evidence graph and synchronization
+└── Hugin   # Thought — context, explanation, and visualization
 ```
+
+These are conceptual responsibilities, not committed OTP application
+boundaries.
 
 ## Status
 
-Early design and research.
-
+Product planning and Phase 1 research.

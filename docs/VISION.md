@@ -2,218 +2,131 @@
 
 ## The problem
 
-Software development is changing.
+AI is making software faster to produce, but not easier to understand.
 
-AI is rapidly becoming capable of producing entire codebases.
-
-The bottleneck is no longer writing code.
-
-The bottleneck is understanding it.
-
-Humans can no longer rely on memorizing an entire codebase when AI continuously generates and refactors thousands of lines of code.
-
-Today's development tools are still built around reading files, searching text, navigating symbols and interpreting logs.
-
-That workflow does not scale.
-
-## Vision
-
-2Ravens is a graph-based understanding layer for Elixir and OTP.
-
-It allows both humans and AI to understand software through behavior rather than source files.
-
-Instead of asking:
-
-- Which file changed?
-
-Users should ask:
+As codebases grow and change more quickly, the bottleneck moves from writing
+code to answering questions such as:
 
 - What behavior changed?
-- Which execution flow is affected?
+- Which execution flows are affected?
 - Which OTP processes participate?
-- Which state changes?
-- Which tests verify this behavior?
+- What state can change?
+- Which tests provide evidence for the behavior?
+- What remains uncertain?
+
+Current tools make people and AI reconstruct those answers from files, text
+searches, diffs, logs, and process inspection. That work is slow, repetitive,
+and easy to get wrong.
+
+## The vision
+
+2Ravens is an understanding layer for Elixir and OTP systems.
+
+It builds a semantic evidence graph from source code, compiler information,
+tests, Git, and scoped runtime observations. It then presents task-oriented
+answers and views rather than exposing the complete graph.
+
+The graph is not the product. The product is faster, more trustworthy
+understanding.
+
+Source files remain available as the deepest level of evidence, but users
+should be able to begin with behavior, execution flow, state ownership, tests,
+and architecture.
+
+## The product path
+
+2Ravens reaches the vision through three sequential phases.
+
+### Phase 1 — AI context
+
+Give an AI agent the smallest trustworthy context needed to complete a task.
+The agent should spend less time searching the repository and be less likely to
+miss important callers, tests, boundaries, or side effects.
+
+### Phase 2 — Behavior-first review
+
+Help a human understand what a code change does and what it can affect before
+reading every line of the diff. Review should move from changed behavior to
+affected flows, evidence, uncertainty, and finally source.
+
+### Phase 3 — Runtime understanding
+
+Help a human explore an unfamiliar OTP system and explain a concrete execution
+or failure. Static relationships and observed runtime events should form one
+grounded account of functions, processes, messages, state transitions, errors,
+and supervisor responses.
+
+Each phase must be useful on its own and must prove the foundation needed by the
+next phase.
 
 ## Core principles
 
-Source code remains the source of truth.
+### Authority remains outside 2Ravens
 
-Files are an implementation detail.
+Source code, tests, Git, and runtime events are authoritative. The graph is a
+derived, disposable projection that can be rebuilt.
 
-The primary interface should be behavior, execution flow and architecture.
+### Evidence must be visible
 
-Progressive disclosure is preferred over exposing implementation immediately.
+Every relationship must identify where it came from. Source-derived,
+compiler-confirmed, test-observed, runtime-observed, and inferred relationships
+must not be presented as equivalent.
 
-Users should only drill down until they understand enough.
+### Uncertainty is part of the answer
 
-## Static understanding
+Elixir permits macros, dynamic dispatch, generated code, and asynchronous
+behavior. 2Ravens must show incomplete, stale, unresolved, or inferred
+information instead of hiding it.
 
-Build a semantic graph from source code.
+### Start with the user's question
 
-Examples:
+Raw graphs quickly become overwhelming. 2Ravens should return opinionated
+projections for a task, change, behavior, process, or debugging session.
 
-- Modules
-- Functions
-- Clauses
-- Pattern matching
-- Guards
-- Call graph
-- Behaviours
-- Protocols
-- Supervisor tree
-- GenServers
-- Message types
-- Tests
-- Documentation
-- Git history
+### Use progressive disclosure
 
-## Runtime understanding
+Begin with a concise explanation. Let the user move through behavior, flows,
+processes, functions, clauses, tests, runtime evidence, and source only as far
+as needed.
 
-Attach to a running BEAM application.
+### Human and AI understanding share one foundation
 
-Visualize:
+The MCP response, review UI, runtime explorer, and copied context should be
+different views over the same evidence model.
 
-- Supervisor tree
-- Process lifecycle
-- Messages
-- State transitions
-- Background timers
-- Live execution
-- Runtime traces
-- Process restarts
+### Runtime observation is scoped and safe
 
-Users should be able to click around their application and watch execution flow through the graph.
+Tracing must be explicit, bounded, and development/test-oriented by default.
+2Ravens must disclose uncertainty, sensitive-value handling, and the risk that
+observation changes timing.
 
-## Function understanding
+### Product value must be measured
 
-Functions become executable graph nodes.
+Every phase must improve a real task. A sophisticated graph that does not make
+agents or humans more effective is not success.
 
-Each function should expose:
+## Hugin and Munin
 
-- Purpose
-- Inputs
-- Outputs
-- Side effects
-- Pattern-matched branches
-- Example executions
-- Tests
-- Coverage
-- Downstream effects
+The project uses two conceptual names:
 
-Users should be able to execute functions manually to understand behavior without writing tests first.
+- **Munin — memory:** indexing, synchronization, evidence, provenance, and graph
+  retrieval.
+- **Hugin — thought:** context selection, explanation, MCP, visualization, and
+  human workflows.
 
-Successful scenarios can be promoted directly into ExUnit tests.
+They describe responsibilities. They should become separate applications only
+if implementation experience demonstrates a useful boundary.
 
-## OTP understanding
+## Long-term destination
 
-OTP is the primary abstraction.
+An AI should be able to request grounded repository context without rebuilding
+the architecture through repeated searches.
 
-The application should be visualized as communicating state machines.
+A reviewer should be able to understand the behavioral effect of a change
+before reading its implementation in detail.
 
-The UI should make it easy to understand:
+A developer should be able to perform one action, follow it through an OTP
+system, inspect relevant state changes, and explain why the result occurred.
 
-- Processes
-- Messages
-- State ownership
-- Supervision
-- Restarts
-- Timers
-
-rather than merely source files.
-
-## AI-first context
-
-One of the primary goals is reducing AI exploration.
-
-Instead of dozens of grep, glob and file-open operations, an AI should retrieve relevant context in one call.
-
-Example:
-
-```
-get_change_context(
-    symbol,
-    task,
-    token_budget
-)
-```
-
-The response should contain only the relevant execution graph, tests, state, architecture and source.
-
-This reduces:
-
-- Tool calls
-- Tokens
-- Hallucinations
-- Missing dependencies
-
-while increasing precision.
-
-## Human-first review
-
-Review should become behavior-oriented.
-
-Instead of reading diffs first, reviewers should see:
-
-- Changed behavior
-- Affected flows
-- Changed branches
-- Tests
-- State changes
-- OTP processes
-- Runtime impact
-
-Source code should be the deepest layer, not the first.
-
-## Knowledge sharing
-
-Everything visible in the UI should be copyable.
-
-Users should be able to copy:
-
-- Function context
-- Execution flow
-- Runtime trace
-- State transitions
-- Review context
-
-and paste directly into an AI conversation.
-
-The copied context should contain exactly the information necessary to solve the problem.
-
-## Hugin & Munin
-
-2Ravens consists of two primary concepts.
-
-### Munin
-
-Memory.
-
-Responsible for:
-
-- Graph index
-- Synchronization
-- Storage
-- Incremental updates
-- Relationships
-
-### Hugin
-
-Thought.
-
-Responsible for:
-
-- MCP
-- Graph queries
-- Visualization
-- AI context generation
-- Human understanding
-
-## Long-term vision
-
-The ultimate goal is to replace file-oriented understanding with graph-oriented understanding.
-
-Humans should navigate software the same way they navigate maps.
-
-AI should reason over semantic relationships instead of reconstructing architecture through repeated text searches.
-
-2Ravens aims to become the understanding layer for Elixir and OTP applications in the AI era.
+2Ravens succeeds when understanding an Elixir system becomes closer to
+navigating a map than assembling a story from disconnected files and logs.

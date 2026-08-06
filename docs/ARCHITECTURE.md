@@ -1,573 +1,333 @@
-Architecture
+# Architecture
 
-Overview
+## Status
 
-2Ravens is an Elixir umbrella application with two conceptual components:
+This document defines the shared architectural direction for the product plan.
+It does not commit the project to an umbrella structure, graph database, native
+extension, UI renderer, or runtime transport.
 
-TwoRavens
+The repository is currently one Mix application. It should remain simple until
+validated workflows demonstrate boundaries that need independent ownership,
+supervision, deployment, or replacement.
+
+## Conceptual architecture
+
+2Ravens has two conceptual responsibilities:
+
+```text
+2Ravens
 ├── Munin — memory
+│   ├── fact production
+│   ├── synchronization
+│   ├── evidence and provenance
+│   └── graph storage and retrieval
 └── Hugin — thought
+    ├── task-oriented projections
+    ├── context selection and compression
+    ├── MCP
+    ├── visualization
+    └── review and debugging workflows
+```
 
-Munin
+These names help reason about responsibilities. They are not application or
+process boundaries until implementation evidence makes them useful as such.
 
-Munin continuously observes and indexes the codebase.
+## System flow
 
-Responsibilities:
+```text
+Source files ───────┐
+Git revisions ──────┤
+Compiler evidence ──┤
+Test observations ──┼→ fact producers → semantic evidence graph
+Runtime sessions ───┘                         ↓
+                                     task-oriented projections
+                                               ↓
+                            MCP / review UI / runtime explorer
+```
 
-* Source indexing
-* Working-tree synchronization
-* Compiler reconciliation
-* Test evidence
-* Runtime trace ingestion
-* Graph storage
-* Provenance
-* Query primitives
+The product grows by adding evidence and projections, not by replacing the
+foundation for each phase:
 
-Hugin
+- Phase 1 builds static facts and the AI context projection.
+- Phase 2 adds before-and-after change projections and a review UI.
+- Phase 3 adds OTP exploration and scoped runtime evidence.
 
-Hugin turns indexed facts into useful understanding.
+## Authority and source materialization
 
-Responsibilities:
+The graph index is derived and disposable:
 
-* MCP server
-* Context selection and compression
-* Change-impact analysis
-* Flow projection
-* Human-facing visualization
-* Copy-context generation
-* Review workflows
-
-This is a conceptual separation. The final umbrella may contain more than two OTP applications.
-
-⸻
-
-Proposed umbrella structure
-
-apps/
-├── two_ravens_core
-├── munin_index
-├── munin_store
-├── munin_source
-├── munin_compiler
-├── munin_tests
-├── munin_runtime
-├── hugin_query
-├── hugin_context
-├── hugin_mcp
-└── hugin_view
-
-The exact number of applications should remain small initially. Boundaries should only be introduced where they provide genuine isolation or reusable contracts.
-
-A simpler first structure may be:
-
-apps/
-├── munin
-├── hugin
-├── two_ravens_mcp
-└── two_ravens_view
-
-⸻
-
-System architecture
-
-Source files
-Git working tree
-Compiler metadata
-ExUnit execution
-Runtime traces
-       ↓
-Fact producers
-       ↓
-Munin graph index
-       ↓
-Graph query and projection
-       ↓
-Hugin
-  ├── MCP
-  ├── Review UI
-  └── Context export
-
-⸻
-
-Graph model
-
-The graph stores relationships and retrieval metadata, not full canonical copies of source files.
-
-Example function node
-
-id: function:Favn.Admission.admit/2
-module: Favn.Admission
-name: admit
-arity: 2
-file: apps/favn_core/lib/favn/admission.ex
-line_start: 42
-line_end: 78
-visibility: public
-
-Example edge
-
-from: function:Favn.Orchestrator.submit/2
-type: CALLS
-to: function:Favn.Admission.admit/2
-origin: source
-confidence: probable
-file_revision: sha256:...
-source_range: 61:5-61:38
-
-Evidence model
-
-The same relationship may have multiple evidence records:
-
-CALLS edge
-├── source parser: probable
-├── compiler tracer: confirmed
-├── test trace: observed
-└── runtime trace: observed
-
-Evidence should be combined without discarding provenance.
-
-⸻
-
-Storage
-
-The graph index is derived and disposable.
-
-Source code = authority
+```text
+Source code = implementation authority
+Git = revision authority
 Tests = behavioral evidence
-Runtime = observed evidence
+Runtime sessions = observed evidence
 Graph index = regenerable projection
+```
 
-SurrealDB option
+The graph should store relationships, retrieval metadata, and references to
+source ranges. Exact source must be read from the relevant repository revision
+when constructing context.
 
-An embedded SurrealDB Rust engine is a possible fit because the project requires:
+The graph must never silently return source from a different revision than the
+relationships being presented.
 
-* Graph traversal
-* Document-like metadata
-* Tabular trace sessions
-* Full-text search
-* Potential vector search
+## Semantic evidence model
 
-Possible deployment:
+### Nodes
 
-Elixir process
-→ Rustler boundary
-→ embedded SurrealDB
-→ in-memory store
+The model should grow from product needs. Likely node types include:
 
-The graph should store compact metadata and references to source ranges. Exact source is read from disk when constructing context.
+- Application
+- Source file
+- Module
+- Function
+- Function clause
+- Behaviour and callback
+- Test and test scenario
+- Supervisor and process
+- Process message
+- Runtime session and event
 
-NIF isolation
+Phase 1 should implement only the subset required by its benchmark.
 
-A Rustler NIF executes within the BEAM operating-system process.
+### Relationships
 
-Therefore:
+Likely relationships include:
 
-* Long operations must not block normal schedulers.
-* Queries should run on dirty schedulers or a Rust worker pool.
-* Inputs and outputs must be bounded.
-* Native crashes remain capable of terminating the VM.
+- Defines
+- Calls
+- Implements callback
+- Tested by
+- Supervises
+- Sends message
+- Handles message
+- Observed during
+- Changed between revisions
 
-If stronger fault isolation becomes necessary, the storage engine can run as a separate executable behind an Erlang Port.
+Inverse relationships such as “called by” may be query projections rather than
+separately stored facts.
 
-Storage abstraction
+### Evidence
 
-The domain must not depend directly on SurrealQL.
+The same fact may have several evidence records:
 
-defmodule TwoRavens.GraphStore do
-  @callback replace_file_fragment(fragment()) ::
-              :ok | {:error, term()}
-  @callback traverse(query()) ::
-              {:ok, graph_result()} | {:error, term()}
-  @callback affected_subgraph(changes(), options()) ::
-              {:ok, graph_result()} | {:error, term()}
-end
+```text
+Function A calls Function B
+├── source parser: probable
+├── compiler: confirmed
+├── test session: observed
+└── runtime session: observed
+```
 
-This permits alternative implementations such as SQLite or an ETS-based prototype.
+Every evidence record should identify:
 
-⸻
+- Origin
+- Confidence
+- Source range or runtime event
+- File revision or session identifier
+- Capture or indexing time where relevant
+- Normalization or redaction applied
 
-Continuous indexing
+Combining evidence must not discard provenance.
 
-Compilation is not the primary update trigger.
+### Stable identity
 
-Source indexing pipeline
+Identifiers should survive irrelevant line movement where practical. Function
+identity can begin with module, name, and arity. Clause identity additionally
+needs file, clause position, and a structural fingerprint of its patterns and
+guards.
 
-Filesystem event
-→ change coalescer
-→ content hashing
-→ tolerant parser
-→ file graph fragment
-→ atomic graph replacement
-→ impact recalculation
+Line numbers alone are not stable enough for clause or test-scenario identity.
 
-File fragment ownership
+## Freshness and uncertainty
 
-Every source-derived fact belongs to a specific file revision.
+Every query or view must be able to report:
 
-Replacing a file fragment must:
+- Repository revision
+- Working-tree state
+- Files indexed successfully
+- Files with stale or incomplete fragments
+- Compiler evidence that is current or stale
+- Unresolved dynamic relationships
+- Inferences that are not confirmed by observation
 
-1. Remove facts owned only by the previous revision.
-2. Insert facts from the new revision.
-3. Preserve evidence from tests or runtime when still referentially valid.
-4. Mark compiler-confirmed facts stale until reconciliation.
+Uncertainty is part of the domain model, not presentation metadata added later.
 
-Parser layers
+## Repository perspectives
 
-Tolerant parser
+The system eventually needs three related perspectives:
 
-Used immediately after edits.
+- **Base graph:** the selected Git base or commit
+- **Working graph:** current files, including uncommitted edits
+- **Change projection:** added, removed, or modified facts between the two
 
-Extracts:
+Phase 1 needs enough revision awareness to materialize correct source. Phase 2
+turns the difference into a first-class review model.
 
-* Modules
-* Functions
-* Clauses
-* Patterns
-* Guards
-* Explicit remote calls
-* Aliases
-* Imports
-* Behaviours
-* GenServer callbacks
-* Test definitions
+## Fact production
 
-Tree-sitter is a likely option because it can retain useful structure from incomplete files.
+### Source parsing
 
-Elixir AST parser
+The initial implementation should use Elixir-native parsing for valid source.
+It should extract only the structures required by Phase 1.
 
-Used when the file parses successfully through Elixir.
+Compilation must enrich rather than gate source indexing. An agent may need
+context while a working tree does not compile.
 
-Code.string_to_quoted(source, columns: true)
+For invalid intermediate files, the first implementation may preserve the last
+valid file fragment and report it as stale. A tolerant parser should be adopted
+only if evaluation shows that this behavior is insufficient.
 
-Provides richer Elixir-specific AST information.
+### Compiler reconciliation
 
-Compiler reconciliation
+Compiler tracers, `mix xref`, or other compiler metadata may confirm and enrich:
 
-Used after compilation.
+- Resolved module relationships
+- Imports and aliases
+- Macro-generated relationships
+- Behaviours and protocols
+- Compile-time dependencies
 
-Confirms or enriches:
+Compiler evidence must retain its own revision and must not silently override
+newer source-derived facts.
 
-* Resolved imports
-* Macro expansion
-* Generated functions
-* Module dependencies
-* Behaviours
-* Protocols
-* Compiler-observed calls
+### Test and runtime evidence
 
-⸻
+Test capture and runtime capture are later fact producers. They should append
+observed evidence to the same model rather than inventing a disconnected trace
+schema.
 
-Git graph overlays
+Observed values require redaction, structural limits, and explicit retention
+rules.
 
-2Ravens maintains multiple graph perspectives:
+## Index updates
 
-HEAD graph
-Working-tree graph
-Change graph
+The first Phase 1 slice may use explicit repository indexing. This keeps the
+product experiment focused on context quality.
 
-HEAD graph
+When continuous indexing becomes necessary, updates should use per-file graph
+fragments:
 
-Represents the checked-out base commit.
+```text
+File event
+→ debounce and content hash
+→ parse file fragment
+→ atomically replace prior fragment
+→ mark compiler evidence stale
+→ refresh affected projections
+```
 
-Working-tree graph
+An invalid update must not destroy the last known valid fragment without making
+that loss visible.
 
-Represents current files, including uncommitted edits.
+## Query and projection architecture
 
-Change graph
+Raw graph traversal is not a user interface. Hugin should expose opinionated
+projections such as:
 
-Represents added, removed or modified symbols and relationships.
+- Change context
+- Symbol context
+- Affected flow
+- Test evidence
+- Process context
+- Runtime session
 
-This allows queries such as:
+Projection construction has three steps:
 
-* What behavior changed?
-* Which flows existed before?
-* Which new callers were introduced?
-* Which tests no longer traverse a branch?
-* Which process state transitions changed?
+```text
+Candidate retrieval
+→ task-aware ranking and compression
+→ exact source materialization
+```
 
-⸻
+Ranking may use graph distance, entry-point importance, boundary crossings,
+side effects, test evidence, documentation, runtime evidence, and token cost.
+The first ranking implementation should be deterministic and explainable before
+it becomes sophisticated.
 
-Test instrumentation
+## Interfaces by phase
 
-Tests provide behavioral evidence.
+### Phase 1
 
-A test capture session should produce:
+- A testable Elixir context API
+- One primary MCP tool
+- Structured Markdown and JSON
+- A basic graph explaining the selected context
 
-test
-→ functions entered
-→ clauses matched
-→ guards evaluated
-→ calls observed
-→ values normalized
-→ messages sent
-→ process state transitions
-→ assertions
+### Phase 2
 
-Clause identification
+- A local change-review UI
+- Before-and-after graph projections
+- Progressive evidence and source drill-down
+- Copyable review context
 
-Function clauses need stable identifiers based on:
+### Phase 3
 
-* Module
-* Function
-* Arity
-* Source file
-* Clause position
-* Pattern fingerprint
+- Static OTP exploration
+- Explicit, bounded runtime attachment
+- Timeline and replay of captured evidence
+- Process, message, state, error, and supervision views
+- Copyable debugging context
 
-Line numbers alone are insufficient because they shift frequently.
+Human and AI interfaces must use the same projections and evidence semantics.
 
-Values
+## Runtime architecture constraints
 
-Runtime values may be large or sensitive.
+Runtime attachment is development/test-oriented and opt-in by default. A
+capture session must bound its modules, processes, duration, event count,
+queues, and value policy.
 
-Stored examples should support:
+The runtime path must support:
 
-* Redaction
-* Depth limits
-* Collection-size limits
-* Struct-aware normalization
-* Hashing
-* Optional raw-value retention for local sessions
+- Backpressure, sampling, or explicit dropping
+- Structural value limits and redaction
+- Authentication and local binding by default
+- Disclosure of tracing mode and overhead
+- Isolation of operations that could block schedulers
+- Clear separation of confirmed events and inferred causality
 
-⸻
+A native component or separate collector should be selected only after the
+capture workflow defines its performance and isolation requirements.
 
-Runtime attachment
+## Initial implementation direction
 
-Runtime attachment is an optional development/test feature.
+Phase 1 should begin with:
 
-Runtime agent
+- One Mix application
+- Small modules separated by explicit data contracts
+- Elixir-native source parsing
+- Compiler evidence where it improves the benchmark
+- In-memory or ETS-backed graph structures
+- Explicit indexing
+- One MCP adapter over a pure context API
+- Deterministic tests built from small fixture repositories
 
-The target application includes an optional dependency or starts an attached helper process.
+Persistence, continuous watching, tolerant parsing, and alternative stores can
+be introduced behind focused boundaries when there is a demonstrated need.
 
-Target BEAM
-├── application processes
-└── TwoRavens.RuntimeAgent
+## Decisions intentionally deferred
 
-The runtime agent emits structured events to the TwoRavens UI or trace collector.
+- Umbrella application boundaries
+- Persistent graph storage technology
+- Embedded native storage
+- Tolerant incomplete-source parser
+- Production graph visualization library
+- Runtime-agent transport and isolation model
+- Distributed tracing
+- Production observation
+- Vector-assisted ranking
 
-Event sources
+These are technical hypotheses, not parts of the product promise.
 
-Possible sources include:
+## Architectural principles
 
-* Telemetry
-* Erlang trace sessions
-* :sys debugging events
-* Process monitoring
-* Supervisor introspection
-* Logger metadata
-* Explicit TwoRavens instrumentation
-
-Scoped sessions
-
-Each trace session defines:
-
-* Trigger
-* Process scope
-* Module scope
-* Correlation metadata
-* Maximum duration
-* Maximum event count
-* Value capture policy
-* Redaction policy
-
-Causality
-
-Asynchronous systems do not always have a simple call stack.
-
-2Ravens should distinguish:
-
-* Confirmed synchronous parent/child relationships
-* Message send and receive relationships
-* Temporal correlation
-* Inferred causality
-* Unknown causality
-
-The UI must not present inferred causality as certain.
-
-⸻
-
-Process and state model
-
-Process nodes
-
-Runtime process nodes may contain:
-
-* PID
-* Registered name
-* Initial call
-* Current function
-* Supervisor parent
-* Children
-* Links
-* Monitors
-* Mailbox length
-* Restart count
-* Start and stop time
-
-GenServer transitions
-
-Represent each callback as:
-
-Incoming message
-+ old state
-→ callback clause
-→ reply or action
-+ outgoing messages
-+ new state
-
-State diffs should be structural and field-oriented where possible.
-
-⸻
-
-Query architecture
-
-Raw graph traversal is insufficient for users and AI.
-
-Hugin provides opinionated projections.
-
-Example projections
-
-* symbol_context
-* change_context
-* execution_flow
-* behavior_tree
-* test_coverage
-* process_context
-* architecture_context
-* runtime_session
-
-Task-aware ranking
-
-Rank candidates using signals such as:
-
-* Changed symbol
-* Graph distance
-* Entry-point relevance
-* Public API visibility
-* Side-effect importance
-* Process boundary crossing
-* Test evidence
-* Runtime evidence
-* Documentation
-* Historical co-change
-* Token cost
-
-⸻
-
-MCP response construction
-
-MCP context generation has three stages:
-
-Graph retrieval
-→ relevance ranking
-→ source materialization
-
-Graph retrieval
-
-Select candidate symbols, tests, processes and flows.
-
-Relevance ranking
-
-Remove or summarize low-value nodes.
-
-Source materialization
-
-Read exact source ranges from the current working tree.
-
-The graph database should not be trusted as the canonical source text.
-
-Response structure
-
-Summary
-Index freshness
-Behavior and flow
-Changed symbols
-Relevant source
-Tests and examples
-State and side effects
-Architecture constraints
-Uncertainties
-
-⸻
-
-Visualization architecture
-
-The UI should visualize graph projections, not the raw complete graph.
-
-Likely technologies:
-
-* Phoenix LiveView
-* SVG or Canvas graph renderer
-* Server-side graph query and layout preparation
-* Client-side pan, zoom and drill-down
-
-Progressive disclosure
-
-The server returns graph levels based on user intent:
-
-Domain flow
-→ module/function flow
-→ clause flow
-→ runtime detail
-
-The UI must avoid rendering every node simultaneously.
-
-⸻
-
-Security
-
-Runtime data may contain:
-
-* Credentials
-* Personal information
-* Database records
-* Authentication tokens
-* File paths
-* Business-sensitive state
-
-Required controls include:
-
-* Development/test only by default
-* Explicit runtime attachment
-* Local binding by default
-* Authentication
-* Redaction rules
-* Value depth and size limits
-* Network allow-lists
-* Trace session limits
-* No production credentials in manual workbench runners
-
-⸻
-
-Performance constraints
-
-The tool must avoid materially changing application behavior.
-
-Important rules:
-
-* No unrestricted global function tracing by default
-* Bounded trace sessions
-* Bounded event queues
-* Backpressure
-* Sampling or dropping policies
-* Asynchronous ingestion
-* Incremental graph updates
-* Cached graph projections
-* Source reads only when needed
-
-Runtime observation that changes timing can create misleading results. The UI should disclose tracing mode and overhead risk.
-
-⸻
-
-Architectural principles
-
-1. Source code remains authoritative.
-2. Every graph fact has provenance.
-3. Provisional and confirmed facts are distinguishable.
-4. Index updates are incremental.
-5. Compiler data enriches rather than gates indexing.
-6. Runtime tracing is scoped and bounded.
-7. Graph projections are task-oriented.
-8. Storage is replaceable.
-9. Human and AI interfaces share the same graph.
-10. Uncertainty must be visible.
+1. Source, Git, tests, and runtime events remain authoritative.
+2. Every graph fact has inspectable provenance.
+3. Provisional, confirmed, observed, and inferred facts remain distinguishable.
+4. Compiler information enriches rather than gates source indexing.
+5. Exact source is materialized from the relevant revision.
+6. Graph projections are task-oriented and progressively disclosed.
+7. Human and AI products share one evidence model.
+8. Runtime capture is explicit, scoped, bounded, and safe by default.
+9. Storage and transports remain replaceable.
+10. Architecture grows only when a validated product workflow requires it.

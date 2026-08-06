@@ -1,396 +1,142 @@
-Roadmap
+# Roadmap
 
-The roadmap prioritizes the immediate value of precise AI context retrieval and static human review.
+## Planning rule
 
-Runtime debugging is built only after the static graph proves useful.
+2Ravens has three product phases. Each phase must deliver a useful workflow and
+pass an evidence-based gate before product development moves to the next.
 
-Phase 0 — Research and technical spikes
+Research may look ahead when it reduces a known risk, but it must not turn into
+building later-phase infrastructure before the current product promise is
+validated.
 
-Goals
+## Current status
 
-Validate the uncertain technical foundations before building the product shell.
+**Product definition and Phase 1 preparation**
 
-Spikes
+The repository currently contains the product vision and plans. The immediate
+work is to finish the Phase 1 contract and benchmark before selecting broad
+architecture or building a product shell.
 
-* Parse Elixir modules, functions, clauses, patterns and guards.
-* Identify explicit local and remote calls.
-* Evaluate Tree-sitter support for incomplete Elixir files.
-* Capture compiler metadata using tracers and mix xref.
-* Test embedded SurrealDB through Rust and Rustler.
-* Measure graph traversal latency.
-* Capture function execution and clause coverage in ExUnit.
-* Inspect supervisor trees and GenServer state safely.
-* Test isolated Erlang trace sessions.
+## Preparation — product contract and benchmark
 
-Exit criteria
+This is preparation for Phase 1, not a separate product phase.
 
-* A small Elixir project can be represented as nodes and edges.
-* One changed file can be incrementally re-indexed.
-* A symbol context query returns relevant callers, callees and tests.
-* Storage choice is supported by measured evidence.
+Deliverables:
 
-⸻
+- Accepted three-phase product plan
+- Example `get_change_context` inputs and complete expected outputs
+- A benchmark set of representative Elixir changes and tasks
+- Human-reviewed reference context for each benchmark task
+- A reproducible baseline of agent work without 2Ravens
+- Focused technical spikes for source ranges, function calls, tests, and
+  compiler evidence
 
-Phase 1 — Munin static index
+Exit condition:
 
-Goal
+- The first product workflow and its evaluation can be implemented without
+  inventing the user contract during development.
 
-Continuously maintain a useful graph of the working repository without requiring compilation.
+## Phase 1 — AI context
 
-Features
+[Full phase plan](phases/01-ai-context.md)
 
-* Filesystem watcher
-* Change debounce and coalescing
-* Content hashing
-* Tolerant source parsing
-* Per-file graph fragments
-* Modules and functions
-* Function clauses
-* Patterns and guards
-* Explicit calls
-* Aliases and imports
-* Behaviours and callbacks
-* Tests
-* Source ranges
-* HEAD and working-tree snapshots
-* Index freshness reporting
+Goal:
 
-Exit criteria
+> Given one changed Elixir function and a task, return the smallest trustworthy
+> context needed to make a correct change.
 
-* Saved file changes appear in the graph quickly.
-* Broad uncompiled edits are visible.
-* Invalid intermediate files do not destroy the last valid graph.
-* Changed symbols can be calculated from the working tree.
+Milestones:
 
-⸻
+1. Benchmark and context contract
+2. Static extraction of the facts required by the benchmark
+3. Task-aware change-context projection
+4. One MCP tool and one basic visual explanation
+5. Evaluation on real agent tasks
 
-Phase 2 — AI Context MCP
+Gate:
 
-Goal
+- Agents complete representative work at least as correctly as the baseline.
+- Repository exploration and context cost are materially reduced.
+- Provenance, freshness, omissions, and uncertainty are inspectable.
 
-Reduce repository exploration from many shell operations to one or two structured calls.
+## Phase 2 — Behavior-first review
 
-Features
+[Full phase plan](phases/02-behavior-review.md)
 
-* Symbol search
-* Symbol context
-* Upstream and downstream traversal
-* Change context
-* Architecture context
-* Test context
-* Source materialization from current files
-* Relevance ranking
-* Token budgets
-* Context freshness and uncertainty
-* Structured Markdown and JSON output
+Goal:
 
-Initial MCP tools
+> Explain what a change does and what it can affect before the reviewer reads
+> every line of the diff.
 
-search_symbols
-get_symbol_context
-get_change_context
-get_execution_flow
-get_test_coverage
-get_architecture_context
+Milestones:
 
-Evaluation
+1. Review contract and evidence language
+2. Before-and-after graph projection
+3. Minimal local change-review UI
+4. Comparative review evaluation
+5. Commit, branch, and optional pull-request integration
 
-Run representative Favn coding tasks with and without 2Ravens.
+Gate:
 
-Measure:
+- Reviewers answer important impact questions faster and with equal or better
+  accuracy than the baseline workflow.
+- The UI does not present inferred impact as confirmed behavior.
+- Tests, uncertainty, source, and the original diff remain inspectable.
 
-* Number of tool calls
-* Input tokens
-* Time to first correct edit
-* Missed dependencies
-* Incorrect assumptions
-* Number of follow-up context requests
+## Phase 3 — Runtime understanding
 
-Target outcome
+[Full phase plan](phases/03-runtime-understanding.md)
 
-Tool calls:
-15–25 → 1–3
-Context:
-150–200k → 30–60k tokens
+Goal:
 
-These are hypotheses, not guaranteed results.
+> Make an unfamiliar Elixir system explorable and make one concrete execution
+> or failure explainable.
 
-Exit criteria
+Milestones:
 
-* Agents consistently use get_change_context.
-* Returned context includes the important files and relationships.
-* Context size is materially smaller than manual repository exploration.
-* Agent accuracy is not degraded.
-
-⸻
-
-Phase 3 — Static review UI
-
-Goal
-
-Allow humans to understand changes through behavior and flows rather than files.
-
-Features
-
-* Repository overview
-* Symbol search
-* Function graph
-* Clause and guard tree
-* Git change overlay
-* Affected flow view
-* Test mapping
-* Uncovered branch highlighting
-* OTP process relationships inferred from source
-* Source drill-down
-* Copy current context
-
-Initial review workflow
-
-Open working-tree change
-→ see changed behavior
-→ inspect affected flow
-→ inspect changed branches
-→ inspect tests
-→ open source only where necessary
-
-Exit criteria
-
-A reviewer can answer these questions without manually searching the repository:
-
-* What behavior changed?
-* What calls this code?
-* What does it call?
-* Which process owns the relevant state?
-* Which tests cover the changed branches?
-* What remains uncertain?
-
-⸻
-
-Phase 4 — Test behavior graph
-
-Goal
-
-Turn tests into concrete examples attached to functions and clauses.
-
-Features
-
-* Test execution capture
-* Function entry tracking
-* Clause coverage
-* Guard outcome coverage
-* Return-shape capture
-* Call-edge coverage
-* Message capture
-* State transition capture
-* Assertion association
-* Value normalization and redaction
-* Scenario replay
-
-Exit criteria
-
-For a selected function, the UI can show:
-
-* Its clauses
-* Tests exercising each clause
-* Example inputs
-* Expected outputs
-* Uncovered branches
-* Side effects that were not asserted
-
-⸻
-
-Phase 5 — Manual function workbench
-
-Goal
-
-Allow users to understand uncovered functions by executing them safely.
-
-Features
-
-* Generated input forms
-* Struct-aware inputs
-* Raw Elixir term input
-* Matched-clause display
-* Guard results
-* Return values
-* Downstream calls
-* Exceptions
-* Isolated execution
-* Temporary database transaction support
-* Side-effect controls
-* Save scenario as ExUnit test
-
-Exit criteria
-
-A user can select an uncovered clause, provide input, inspect the result and generate a regression test.
-
-⸻
-
-Phase 6 — OTP process visualization
-
-Goal
-
-Present the application as a system of supervised communicating processes.
-
-Features
-
-* Supervisor tree
-* Registered processes
-* Process lifecycle
-* Links and monitors
-* Restart strategies
-* Message definitions
-* GenServer callback graph
-* Timer and tick relationships
-* Static state ownership view
-
-Exit criteria
-
-A user unfamiliar with the codebase can identify:
-
-* Which processes exist
-* Who supervises them
-* What messages they handle
-* What state they own
-* Which application flows involve them
-
-⸻
-
-Phase 7 — Attached runtime sessions
-
-Goal
-
-Trace one selected interaction through a live development or test application.
-
-First vertical slice
-
-Use a concrete Favn flow such as:
-
-Click “Submit run”
-→ LiveView event
-→ Orchestrator
-→ Scheduler GenServer
-→ Admission
-→ Persistence
-→ RunnerSupervisor
-
-Features
-
-* Runtime attachment
-* Scoped capture sessions
-* Live supervisor tree
-* Function execution overlay
-* Message send and receive
-* GenServer state before and after
-* Child process creation
-* Timer events
-* Exceptions and restarts
-* Session timeline
-* Copy runtime context
-
-Exit criteria
-
-The user can:
-
-1. Start capture.
-2. Click an application UI action.
-3. See the resulting process and function flow.
-4. Inspect relevant state changes.
-5. Copy the captured context for an AI.
-
-⸻
-
-Phase 8 — Replay and causal explanation
-
-Goal
-
-Help users understand why runtime behavior occurred.
-
-Features
-
-* Event-by-event replay
-* Synchronized graph and state panels
-* Message lineage
-* Process lifecycle replay
-* Supervisor restart explanation
-* Error-path extraction
-* “Why did this happen?” context generation
-* Confirmed versus inferred causality
-
-Exit criteria
-
-For a recorded failure, 2Ravens can produce a grounded explanation containing:
-
-* Trigger
-* Function path
-* Process messages
-* State transitions
-* Failure
-* Supervisor response
-* Relevant source and tests
-
-⸻
-
-Phase 9 — Advanced capabilities
-
-Potential later features:
-
-* Historical graph comparisons
-* Architecture boundary rules
-* Automatic detection of undesirable dependencies
-* Runtime versus static graph drift
-* Suggested missing tests
-* Test generation from manual sessions
-* Distributed BEAM visualization
-* Cross-node message flow
-* Production-safe sampled observation
-* Semantic search
-* Vector-assisted context ranking
-* Architecture documentation generation
-* Hot-code upgrade visualization
-
-These should not be prioritized until the core MCP and review workflows demonstrate clear value.
-
-⸻
-
-Product validation principles
-
-Every phase should be measured against actual user problems.
-
-AI value
-
-* Fewer repository exploration calls
-* Lower token usage
-* Better dependency recall
-* Fewer incorrect edits
-* Faster task completion
-
-Human value
-
-* Faster review orientation
-* Better understanding of affected behavior
-* Easier identification of missing tests
-* Less source code that must be read
-* Greater confidence reviewing AI-generated changes
-
-Runtime value
-
-* Faster identification of process and state interactions
-* Less dependence on interpreting raw logs
-* Easier understanding of supervisor behavior
-* Reproducible captured debugging sessions
-
-⸻
-
-Immediate next milestone
-
-The first deliverable should be deliberately narrow:
-
-Given one changed Elixir function, return a precise graph-based context package containing its clauses, important callers, important callees, relevant tests, application boundaries and exact source ranges.
-
-Deliver this through both:
-
-* One MCP tool
-* One basic visual graph
-
-Everything else builds on that foundation.
+1. Static OTP system explorer
+2. Bounded ExUnit capture
+3. Attached local development capture
+4. Timeline, replay, and grounded explanation
+5. Comparative exploration and debugging evaluation
+
+Gate:
+
+- An unfamiliar developer can identify the processes and state owners involved
+  in a behavior.
+- A bounded interaction can be captured and explained through functions,
+  messages, state transitions, errors, and supervisor responses.
+- Runtime observations and inferred causality remain clearly distinguished.
+
+## Later opportunities
+
+These ideas are outside the initial three-phase commitment and require separate
+validation:
+
+- Historical graph comparisons
+- Architecture boundary rules
+- Detection of undesirable dependencies
+- Suggested missing tests
+- An isolated manual function workbench
+- Test generation from captured sessions
+- Static-versus-runtime drift
+- Distributed BEAM and cross-node message flow
+- Production-safe sampled observation
+- Semantic or vector-assisted ranking
+- Architecture documentation generation
+- Hot-code-upgrade visualization
+
+## Immediate next milestone
+
+Before implementing the index:
+
+1. Select the initial benchmark repository and representative tasks.
+2. Write the expected context package for one changed Elixir function by hand.
+3. Define the evidence and freshness fields in that package.
+4. Record the baseline agent workflow for the same task.
+5. Run only the technical spikes needed to reproduce that package from source
+   and compiler evidence.
+
+The first implementation milestone is complete when the hand-written package
+can be produced automatically through one MCP tool and inspected as one basic
+graph.
