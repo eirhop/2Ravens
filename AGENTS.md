@@ -73,6 +73,8 @@ For new code:
 - keep naming precise and boring
 - avoid premature abstraction
 - avoid introducing dependencies unless they clearly reduce complexity
+- follow relevant code patterns from skills to standardise the repo.
+- if new code patterns emerges. Discuss them with the manager and when approved create or update in-project code pattern skills 
 
 ## Priority order for decisions
 
