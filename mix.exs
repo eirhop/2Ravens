@@ -13,7 +13,7 @@ defmodule TwoRavens.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :mix]
     ]
   end
 

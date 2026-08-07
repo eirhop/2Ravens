@@ -2,6 +2,7 @@ defmodule TwoRavens.BenchmarkContractTest do
   use ExUnit.Case, async: true
 
   @benchmark_dir Path.expand("../benchmarks/ravens_benchmark", __DIR__)
+  @greenfield_dir Path.expand("../benchmarks/greenfield_authoring", __DIR__)
   @fixture_dir Path.expand("../dev/benchmark_app", __DIR__)
 
   setup_all do
@@ -56,5 +57,28 @@ defmodule TwoRavens.BenchmarkContractTest do
 
     refute String.starts_with?(oracle_path, @fixture_dir)
     refute File.exists?(Path.join(@fixture_dir, "benchmark/expected.exs"))
+  end
+
+  test "the greenfield comparison freezes both conditions and honest metrics" do
+    {task, _binding} = Code.eval_file(Path.join(@greenfield_dir, "task.exs"))
+
+    assert task.schema_version == 2
+    assert Enum.map(task.conditions, & &1.id) == [:ordinary_files, :two_ravens]
+    assert task.token_metrics == :record_when_host_exposes_them
+    assert task.unmeasured_values == :must_remain_unavailable
+
+    for condition <- task.conditions do
+      assert :input_bytes in condition.required_evidence
+      assert :output_bytes in condition.required_evidence
+      assert :qualification_output_bytes in condition.required_evidence
+      assert :qualification_commands in condition.required_evidence
+      assert :compile in condition.required_evidence
+      assert :tests in condition.required_evidence
+      assert :incorrect_target_attempts in condition.required_evidence
+    end
+
+    baseline = File.read!(Path.join(@greenfield_dir, "baseline.md"))
+    assert baseline =~ "tokens remain `unavailable`"
+    assert baseline =~ "no token-saving claim"
   end
 end

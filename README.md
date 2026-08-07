@@ -43,4 +43,6 @@ boundaries.
 
 ## Status
 
-Greenfield semantic-authoring MVP ready for implementation.
+The [greenfield semantic-authoring MVP](docs/scopes/01-greenfield-authoring-mvp.md)
+is implemented. It manages only source created through 2Ravens, rebuilds its
+graph on every command, and qualifies explicit writes in an isolated project.

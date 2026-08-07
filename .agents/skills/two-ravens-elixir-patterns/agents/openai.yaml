@@ -1,0 +1,4 @@
+interface:
+  display_name: "2Ravens Elixir Patterns"
+  short_description: "Apply safe, evidence-first Elixir patterns"
+  default_prompt: "Use $two-ravens-elixir-patterns to implement or review a 2Ravens Elixir change."
