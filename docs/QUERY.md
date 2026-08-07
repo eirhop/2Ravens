@@ -5,7 +5,7 @@
 An AI agent often knows what it wants to understand but spends many operations
 finding definitions, callers, effects, tests, process relationships, and source.
 
-2Ravens exposes one flexible operation over the prebuilt repository graph:
+2Ravens exposes one flexible operation over a source-derived repository graph:
 
 ```text
 context(
@@ -19,6 +19,10 @@ context(
 
 The agent interprets the user's task. The query contains explicit graph needs,
 not open-ended task prose.
+
+During the greenfield MVP, the graph is rebuilt from only 2Ravens-managed files
+and the implemented query is a narrow function-focus subset of this contract.
+Phase 1 extends the same contract to arbitrary existing repositories.
 
 ## Interfaces
 
@@ -34,9 +38,13 @@ The initial user-facing forms are:
 
 ```text
 Mix task:   mix ravens
+Query:      mix ravens context
 MCP server: two_ravens
 MCP tool:   context
 ```
+
+The MVP implements the Mix task and ordinary Elixir API first. MCP remains
+deferred until the local authoring and read-back contracts are stable.
 
 The Mix task is the first development and diagnostic interface. The local
 STDIO MCP server is the preferred agent interface once the contract is stable.
@@ -250,7 +258,27 @@ RunnerSupervisor has 14 unexpanded downstream relationships.
 ```
 
 The agent can call `context` again using a returned node ID. No separate
-`expand` tool is required.
+`expand` tool is required. When the semantic-authoring MVP requests editable
+source, the CLI may also return a compact revision-bound alias for that node.
+The alias is an adapter convenience; the response retains the canonical graph
+identity and revision.
+
+### Edit-oriented CLI preset
+
+```powershell
+mix ravens context function:RavensShop.Pricing.discount/2 `
+  --root tmp/ravens_shop `
+  --for-edit
+```
+
+`--for-edit` selects the source, clause, direct-impact, freshness, and editable
+property details needed by the [semantic-editing contract](EDITING.md). It is a
+CLI preset over the ordinary `context` parameters, not a separate graph query
+or MCP tool.
+
+The MVP preset also reports when its graph is limited to managed files and
+lists unsupported or unexpanded source facts. It must not imply that the
+complete Phase 1 query contract has been implemented.
 
 ## Progressive usage scenarios
 

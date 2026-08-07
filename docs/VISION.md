@@ -37,11 +37,20 @@ The graph is not a claim that every Elixir relationship is statically
 knowable. Dynamic calls, generated code, protocol dispatch, and process
 destinations must remain visible as possible or unresolved relationships.
 
-## One model across three phases
+The first proof is deliberately smaller and write-first. 2Ravens creates and
+edits a constrained greenfield Elixir project, derives relationships from the
+source it produced, and verifies that its semantic model survives formatting,
+compilation, tests, and source read-back. General brownfield understanding
+follows only after that closed loop works.
+
+## One foundation across three phases
 
 The product follows one coherent progression:
 
 ```text
+MVP:     Can 2Ravens create and safely change ordinary Elixir?
+         Managed semantic authoring
+
 Phase 1: What could happen?
          Possible execution graph
 
@@ -60,6 +69,10 @@ module, function, change, test, keyword result, or several focus nodes.
 
 The target outcome is to replace many manual exploration operations with one to
 three graph queries without reducing correctness.
+
+The MVP before this phase indexes only files created and managed by 2Ravens.
+Phase 1 broadens that proven read-back boundary to arbitrary existing
+repositories.
 
 ### Phase 2 — Behavior-first review
 
@@ -119,6 +132,14 @@ Raw graph neighborhoods quickly become overwhelming. Queries should follow
 meaningful paths from entry points to focus nodes, from focus nodes to effects,
 from senders to message handlers, and from tests to exercised code.
 
+### Reuse understanding when changing code
+
+An agent creates substantial implementations as ordinary Elixir. Once 2Ravens
+has resolved a precise program element, the agent can reuse that revision-bound
+identity for a compact known change instead of repeating file paths and textual
+patch context. Every accepted candidate materializes inspectable source and is
+re-derived from that source before it becomes trusted graph evidence.
+
 ### Use progressive disclosure
 
 An agent or human may begin with a shallow module view, continue with a function
@@ -147,6 +168,10 @@ if implementation experience demonstrates a useful boundary.
 
 An AI should be able to request the relevant execution slice instead of
 spending many steps reconstructing callers, dependencies, tests, and effects.
+
+When that slice identifies a safe edit target, the AI should be able to propose
+the smallest clear change and receive its source and behavior impact without
+manually describing the graph relationships that 2Ravens can derive.
 
 A reviewer should be able to see how the possible behavior changed before
 reading the complete diff.

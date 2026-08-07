@@ -2,9 +2,11 @@
 
 ## Planning rule
 
-2Ravens has three product phases built on one graph:
+2Ravens begins with one managed-authoring MVP, followed by three product phases
+built on the same source-derived graph:
 
 ```text
+MVP: greenfield semantic authoring
 Phase 1: possible execution
 Phase 2: changed possibilities
 Phase 3: observed execution
@@ -15,11 +17,47 @@ before product development moves to the next.
 
 ## Current status
 
-**Product definition and Phase 1 technical validation**
+**Greenfield semantic-authoring MVP ready for implementation**
 
-The immediate work is to prove that a real Elixir repository can become a
-useful local function, dataflow, and OTP graph before building a product shell
-or selecting broad infrastructure.
+The immediate work is to prove that 2Ravens can create and safely change a
+small ordinary Elixir application. It will derive a narrow graph from only the
+files it manages, qualify every applied change, and reconstruct the same graph
+from generated source. General brownfield indexing remains the next Phase 1
+expansion.
+
+## MVP foundation — managed semantic authoring
+
+[Developer scope](scopes/01-greenfield-authoring-mvp.md) ·
+[Semantic-editing contract](EDITING.md)
+
+Goal:
+
+> Let an AI create, inspect, and safely change a small greenfield Elixir system
+> through 2Ravens while keeping ordinary source and Git recoverable.
+
+Milestones:
+
+1. Initialize small management metadata in an existing new Mix project.
+2. Create modules and functions from normal Elixir input.
+3. Read managed files back into a deterministic in-memory graph.
+4. Derive function, clause, call, guard, and test relationships.
+5. Return compact context and a stateless revision-bound edit handle.
+6. Dry-run and explicitly apply one comparison-operator edit.
+7. Qualify candidates through formatting, compilation, tests, and graph/source
+   round-trip checks.
+8. Compare the same creation and edit workflow with ordinary file operations.
+
+Gate:
+
+- Generated files remain ordinary formatted Elixir.
+- A new CLI process reconstructs the accepted graph from managed source.
+- Relationships are derived rather than asserted by the caller.
+- Stale targets, unsafe paths, and unsupported structures fail explicitly.
+- Applied changes affect only intended managed paths.
+- The end-to-end workflow is no less correct than direct file editing.
+
+Do not add a database, daemon, MCP write tool, UI, custom language, or general
+brownfield importer before this gate passes.
 
 ## Preparation — contract and benchmark
 
@@ -140,19 +178,12 @@ validation while preserving local operation:
 
 ## Immediate next milestone
 
-Build a technical spike that proves one complete execution slice:
+[Developer scope: greenfield semantic authoring MVP](scopes/01-greenfield-authoring-mvp.md)
 
-1. Select a small real Elixir repository and one representative function.
-2. Parse every function and clause in the repository.
-3. Resolve explicit local and remote calls.
-4. Record call-site argument mappings and branch conditions.
-5. Connect relevant tests.
-6. Connect one GenServer message send to its handler clause.
-7. Query upstream paths to meaningful entry points.
-8. Query downstream paths to effects or application boundaries.
-9. Return the minimal subgraph with exact source, uncertainty, and frontier.
-10. Repeat with two focus functions and deduplicate their shared context.
+Implement the scope checkpoint by checkpoint, beginning with a disposable Mix
+project and one generated module. The milestone passes when the complete
+two-module creation, relationship query, one-token edit, qualification, apply,
+and read-back workflow succeeds through ordinary Elixir APIs and `mix ravens`.
 
-The milestone passes when `mix ravens` can reproduce the hand-written expected
-slice locally and deterministically. MCP is added after this core contract is
-stable.
+Use the [copy-paste implementation prompt](scopes/01-implementation-prompt.md)
+to hand the bounded scope to a developer.

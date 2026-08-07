@@ -2,7 +2,12 @@
 
 ## Status
 
-Planned. This is the active product phase.
+Planned. This begins after the greenfield semantic-authoring MVP gate.
+
+The MVP proves safe creation, narrow read-back indexing, graph identities,
+qualification, and one semantic edit for 2Ravens-managed files. Phase 1 expands
+that boundary to arbitrary existing repositories; it does not need to reinvent
+the authoring loop.
 
 ## Product promise
 
@@ -62,6 +67,17 @@ See [Context query](../QUERY.md) for the complete contract and usage scenarios.
 An exact function may require one query. A vague issue may require a shallow
 keyword or module query followed by a focused execution-envelope query. A
 dynamic or ambiguous path may require one additional expansion.
+
+## Entry criteria
+
+Begin general brownfield implementation only after the managed-authoring MVP
+proves:
+
+- Generated source reconstructs to the accepted graph in a new CLI process.
+- Canonical identities and stale-handle detection work for the supported subset.
+- Derived calls and tests remain deterministic after formatting and compilation.
+- Unsafe or unsupported writes fail without modifying source.
+- The graph/source round-trip and qualification boundaries are reusable.
 
 ## First complete vertical slice
 

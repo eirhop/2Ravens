@@ -2,10 +2,10 @@
 
 ## Status
 
-This document defines the shared architecture for the three-phase product plan.
-It commits the project to a local deterministic repository graph, not to an
-umbrella structure, persistent store, native extension, UI renderer, or runtime
-transport.
+This document defines the shared architecture for the greenfield MVP and the
+three-phase product plan. It commits the project to a local deterministic
+repository graph, not to an umbrella structure, persistent store, native
+extension, UI renderer, or runtime transport.
 
 The repository is currently one Mix application and should remain simple until
 validated workflows demonstrate boundaries that need independent ownership,
@@ -53,6 +53,8 @@ boundaries until implementation experience proves that separation useful.
 ## System model
 
 ```text
+Normal Elixir input ─→ authoring candidate ─→ managed source files
+                                             ↓
 Source files ───────┐
 Git revisions ──────┤
 Compiler evidence ──┤
@@ -71,12 +73,15 @@ user's request and supplies explicit focus and traversal parameters to the
 
 ```text
 Source code = implementation authority
-Git = revision authority
+Git when present = named revision authority
+File hashes = current working revision
 Tests = behavioral evidence
 Runtime sessions = observed evidence
 Repository graph = regenerable projection
 ```
 
+2Ravens keeps a small versioned manifest of paths it created during the MVP;
+that manifest grants write scope but does not duplicate source or graph facts.
 2Ravens-specific code annotations are not part of the architecture. Ordinary
 documentation, typespecs, behaviours, tests, routes, callbacks, and other
 Elixir constructs are indexed because they are already part of the system.
@@ -211,9 +216,13 @@ discarding the distinction.
 
 ## Building the repository graph
 
-The indexer should parse every repository source file and produce per-file
-graph fragments. Once definitions are known, it resolves references and adds
-relationships until the statically knowable graph reaches a fixed point.
+The MVP read-back indexer parses only files listed in the management manifest
+and produces per-file graph fragments for its supported Elixir subset. It
+rebuilds this small graph on every CLI command.
+
+Phase 1 broadens the same fragment boundary to every repository source file.
+Once definitions are known, it resolves references and adds relationships until
+the statically knowable graph reaches a fixed point.
 
 External dependencies can initially terminate at boundary nodes. Dependency
 source may be indexed later when a validated workflow requires traversal into
@@ -222,9 +231,10 @@ it.
 ### Source parsing
 
 Elixir-native parsing provides the first graph without requiring successful
-compilation. It extracts modules, functions, macros, clauses, patterns, guards,
-calls, aliases, imports, behaviours, tests, documentation, types, and exact
-source references.
+compilation. The MVP extracts the supported modules, functions, clauses,
+patterns, guards, calls, tests, and exact source references from managed files.
+Phase 1 later broadens extraction to macros, aliases, imports, behaviours,
+documentation, types, and arbitrary repository files.
 
 For invalid intermediate files, the first implementation may retain the last
 valid fragment with explicit stale status. A tolerant parser is adopted only if
@@ -470,10 +480,48 @@ marking that mismatch.
 Multi-focus responses materialize shared source and documentation once and
 reference it from every relevant path.
 
+## Semantic authoring and candidate changes
+
+Semantic authoring creates the first graph identities and then reuses them
+without changing the authority model:
+
+```text
+Large creation: normal Elixir fragment ─────────┐
+Small change: context -> edit handle -> set ────┤
+                                                 ↓
+candidate graph and source patch
+-> source-to-graph round-trip
+-> isolated compile and focused checks
+-> explicit apply
+-> working-tree source
+-> re-indexed graph
+```
+
+An edit handle is a compact revision-bound alias for one canonical graph node,
+its source anchor, structural fingerprint, and permitted editable properties.
+It is rejected when the base revision, file hash, or structure is stale.
+
+A candidate is immutable and unapplied. It records requested operations,
+resolved targets, source and graph deltas, affected execution envelopes,
+qualification evidence, and diagnostics. Correcting a candidate creates a new
+candidate.
+
+Operations never write graph storage records directly. `create module` and
+`create function` accept ordinary Elixir. `set` changes one allowed
+source-derived property. Parsing, compiler reconciliation, and tests continue
+to derive relationships and evidence.
+
+Before apply, 2Ravens materializes the candidate source, rebuilds affected graph
+fragments, and compares that rebuilt graph with the candidate graph. A mismatch
+is an error, not an automatic repair. Apply verifies the base hashes, writes the
+ordinary source patch, and re-indexes the result. It does not commit to Git.
+
+The complete contract and MVP plan are in [Semantic editing](EDITING.md).
+
 ## Index updates
 
-The first Phase 1 slice may use explicit indexing. Once continuous updates are
-required, use per-file graph fragments:
+The MVP explicitly rebuilds its managed per-file fragments for each command.
+Once Phase 1 requires continuous updates, use the same fragment boundary:
 
 ```text
 File event
@@ -492,18 +540,31 @@ the loss visible.
 The core operation belongs to an ordinary Elixir API. Transports remain thin:
 
 ```text
-mix ravens ──────┐
-local MCP tool ──┼→ TwoRavens.Context → Munin graph
-future local UI ─┘
+mix ravens context ─┐
+local MCP context ──┼→ TwoRavens.Context → Munin graph
+future local UI ────┘
+
+mix ravens create/set [--apply] → TwoRavens.Authoring → candidate → source patch
 ```
 
 The Mix task is useful for development, diagnostics, scripting, and fallback.
-The local STDIO MCP server is the preferred AI integration because it provides
-a discoverable structured schema and can keep the index warm.
+The local STDIO MCP server is the preferred context integration because it
+provides a discoverable structured schema and can keep the index warm. The
+semantic-authoring MVP is CLI-first; an MCP write adapter is added only after
+the ordinary Elixir authoring API and CLI contract are validated.
 
 MCP is a transport, not the domain architecture.
 
 ## Architecture by phase
+
+### MVP foundation — managed semantic authoring
+
+- Initialize a small manifest in an existing greenfield Mix project.
+- Create modules and functions from ordinary Elixir.
+- Rebuild a narrow graph from only managed files on every command.
+- Query created behavior and apply one revision-bound semantic edit.
+- Qualify every applied candidate through source round-trip, compilation, and
+  tests.
 
 ### Phase 1 — possible behavior
 
@@ -527,22 +588,23 @@ MCP is a transport, not the domain architecture.
 
 ## Initial implementation direction
 
-Phase 1 should begin with:
+The MVP should begin with:
 
 - One Mix application
 - Small modules separated by explicit data contracts
-- Elixir-native source parsing
-- Compiler reconciliation where it improves correctness
-- In-memory or ETS-backed graph structures
-- Explicit indexing
-- One pure context API
+- Safe root validation and a small manifest of managed paths
+- Normal Elixir input for module and function creation
+- Elixir-native parsing of the supported managed-source subset
+- In-memory immutable graph structures rebuilt on each command
+- One focused context API
 - `mix ravens` as the first adapter
-- One local STDIO MCP adapter after the query contract stabilizes
-- Deterministic fixture repositories and real-repository benchmarks
+- CLI-first creation, candidate qualification, context, `set`, and `--apply`
+- Disposable greenfield-project integration tests
 
-Persistence, continuous watching, tolerant parsing, and alternative embedded
-stores can be introduced behind focused boundaries when demonstrated needs
-appear.
+Phase 1 later adds general repository indexing, compiler reconciliation, the
+complete context query, real-repository benchmarks, and one local STDIO MCP
+adapter. Persistence, continuous watching, tolerant parsing, and alternative
+embedded stores remain evidence-driven choices.
 
 ## Decisions intentionally deferred
 
@@ -553,6 +615,10 @@ appear.
 - Runtime-agent transport and isolation model
 - Distributed runtime observation
 - Production observation
+- MCP write tools
+- Persistent candidate storage
+- General brownfield importing during the MVP
+- Semantic edit operations beyond the validated creation and `set` slices
 
 All future choices must preserve local operation and inspectable results.
 
@@ -560,7 +626,8 @@ All future choices must preserve local operation and inspectable results.
 
 1. Build the repository graph independently of a user task.
 2. Derive relationships from code and evidence rather than custom annotations.
-3. Source and Git remain authoritative; tests and runtime provide evidence.
+3. Source and Git when present remain authoritative; tests and runtime provide
+   evidence.
 4. Every fact has inspectable provenance, confidence, revision, and freshness.
 5. Statically unknowable relationships remain candidate, unresolved, or
    unknown.
@@ -571,3 +638,5 @@ All future choices must preserve local operation and inspectable results.
    materialization.
 9. Human and AI products share one graph and evidence model.
 10. Every core capability runs locally without credentials or hosted services.
+11. A semantic candidate becomes trustworthy only after its materialized source
+    rebuilds to the proposed graph without hidden changes.

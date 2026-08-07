@@ -2,12 +2,13 @@
 
 > A local execution map for Elixir, OTP, humans, and AI.
 
-2Ravens parses an Elixir repository into a deterministic graph of applications,
-modules, functions, clauses, calls, values, tests, OTP processes, messages, and
-effects. AI agents and humans query slices of that graph instead of rebuilding
-the same understanding through repeated searches and file reads.
+2Ravens is a local semantic authoring and understanding layer for Elixir. Its
+first MVP creates and edits a constrained greenfield project through ordinary
+Elixir, then reads the generated source back into a deterministic graph. Later
+phases extend that graph to arbitrary repositories, behavior review, and runtime
+understanding.
 
-The product is planned in three phases:
+After the write-first MVP foundation, the product is planned in three phases:
 
 1. **AI context — what could happen?** Return a precise possible execution
    graph around one or more points of focus.
@@ -25,6 +26,7 @@ account, API key, cloud service, embedding model, or external database.
 - [Vision](docs/VISION.md)
 - [Product plan](docs/PRODUCT.md)
 - [Context query](docs/QUERY.md)
+- [Semantic editing](docs/EDITING.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
 
@@ -41,4 +43,4 @@ boundaries.
 
 ## Status
 
-Product planning and Phase 1 technical validation.
+Greenfield semantic-authoring MVP ready for implementation.

@@ -2,7 +2,8 @@
 
 ## Product thesis
 
-2Ravens turns a local Elixir repository into a queryable execution map.
+2Ravens turns ordinary Elixir into a queryable and safely editable execution
+map.
 
 Today, a capable coding agent often builds that map manually:
 
@@ -20,6 +21,12 @@ Task
 2Ravens should make the repository-understanding portion available in one to
 three deterministic graph queries.
 
+The first MVP starts one step earlier: it lets an AI create a constrained
+greenfield Elixir system through 2Ravens, derives its relationships, and proves
+that every accepted semantic model round-trips through ordinary source. This
+write-first foundation tests the complete authoring loop before the project
+attempts to import arbitrary brownfield repositories.
+
 ```text
 Source + compiler + tests + Git + local runtime observations
                             ↓
@@ -36,18 +43,32 @@ Source + compiler + tests + Git + local runtime observations
 The agent understands the user's task and decides what it needs to explore.
 2Ravens understands repository relationships and returns the requested slice.
 
-The initial API therefore does not accept open-ended task prose. It accepts
+The context API therefore does not accept open-ended task prose. It accepts
 structured focus, traversal, inclusion, input-constraint, and output-limit
 parameters. Keyword search is local and lexical; it resolves candidate anchors
 rather than pretending to understand intent.
 
+The MVP authoring API separately accepts explicit module names, revision-bound
+targets, and ordinary Elixir fragments. It does not ask another model to
+reinterpret the agent's intent.
+
 See the complete [context-query contract](QUERY.md).
+
+The [semantic-editing](EDITING.md) MVP creates trustworthy revision-bound
+identities while authoring a small managed project. It accepts normal Elixir for
+substantial additions and compact property operations for small known edits.
+Graph storage does not become authoritative.
+
+General repository understanding remains the Phase 1 destination. The MVP only
+reads files that it created and recorded as managed; it is not a brownfield
+importer.
 
 ## Local-first guarantee
 
 After installation, every core workflow must run with network access disabled:
 
 - Index a repository
+- Create and edit a managed greenfield project
 - Resolve exact symbols and local keyword matches
 - Query single-focus and multi-focus graph slices
 - Produce an input-sensitive execution envelope
@@ -72,8 +93,8 @@ or weaken the complete local workflow.
 
 ### AI coding agents
 
-They need precise, bounded graph slices with exact source, stable identities,
-visible traversal limits, and unresolved relationships.
+They need compact normal-Elixir creation, precise bounded graph slices, stable
+identities, visible traversal limits, and unresolved relationships.
 
 ### Human reviewers
 
@@ -85,8 +106,21 @@ including branches, messages, effects, tests, and uncertainty.
 They need to navigate the possible graph and see an observed execution
 highlighted within it.
 
-The users are served in that order because each later product depends on the
-same graph being trustworthy.
+The first MVP serves AI coding agents through semantic authoring. The three
+later products remain ordered because each depends on the same graph being
+trustworthy.
+
+## MVP foundation
+
+Before Phase 1, 2Ravens proves one bounded write-and-read loop:
+
+| Foundation | Product question | Primary proof |
+| --- | --- | --- |
+| Greenfield semantic authoring | Can an AI create and safely change a small Elixir system through 2Ravens? | Created source remains ordinary Elixir; derived relationships, minimal edits, qualification, and source-to-graph reconstruction are deterministic. |
+
+The foundation is intentionally narrower than the long-term product. It manages
+only its own files and supported Elixir subset. Comprehensive brownfield
+indexing begins after this gate.
 
 ## The three phases
 
@@ -104,10 +138,10 @@ validated.
 
 ### Repository graph
 
-The graph represents the complete set of statically knowable relationships in
-the repository. It includes structural, call, control-flow, dataflow, test, OTP,
-and documentation information. Dynamic behavior is represented as candidate or
-unresolved relationships rather than omitted or guessed.
+The long-term graph represents the complete set of statically knowable
+relationships in the repository. The MVP graph contains only supported facts
+from 2Ravens-managed files. In both cases, unsupported or dynamic behavior is
+represented as unresolved rather than omitted or guessed.
 
 ### Execution envelope
 
@@ -131,6 +165,19 @@ mappings, messages, and abstract values as far as static evidence permits.
 
 Phase 2 compares base and working execution envelopes. It shows added, removed,
 or changed nodes, edges, paths, conditions, effects, and evidence.
+
+### Semantic candidate
+
+A semantic candidate is an unapplied change against one known repository
+revision. It may contain ordinary Elixir for substantial code or a compact
+property operation for a small known edit. 2Ravens materializes the candidate
+as source, rebuilds the affected graph, and compares the result with the
+requested change before it can be applied.
+
+Semantic editing begins as the MVP foundation rather than a fourth product
+phase. It establishes the identity, materialization, qualification, and
+round-trip boundaries later reused by Phase 1 context and Phase 2 change
+projection.
 
 ### Observed trace
 
@@ -156,12 +203,13 @@ its provenance.
 
 2Ravens is not intended to become:
 
-- A code editor
+- A general-purpose code editor or IDE
 - An autonomous coding agent
 - An agent harness
 - A replacement for Git or GitHub
 - A replacement for ExUnit
-- A canonical source-code store
+- A canonical source-code store; semantic candidates materialize ordinary
+  source and never replace source or Git authority
 - A cloud indexing service
 - A general production APM or distributed tracing platform
 - A system that requires codebases to add 2Ravens-specific annotations
@@ -169,16 +217,20 @@ its provenance.
 
 ## Planning principles
 
-### Build the graph once and slice it many ways
+### Derive the graph from source and slice it many ways
 
-Index the repository independently of a user task. Queries choose focus,
-directions, relationships, stopping points, constraints, and limits.
+The MVP rebuilds its small graph from managed source on each command. Later
+phases may maintain a warm index independently of a user task. Queries choose
+focus, directions, relationships, stopping points, constraints, and limits.
 
 ### Derive facts from the system
 
 Callers, effects, process relationships, tests, and ownership should be derived
 from code and evidence. When they cannot be derived, show the uncertainty
 instead of adding a second declaration that can become stale.
+
+Agents may request changes to editable source-derived properties, but they do
+not directly write derived calls, effects, test observations, or evidence.
 
 ### Preserve paths, not only neighborhoods
 
