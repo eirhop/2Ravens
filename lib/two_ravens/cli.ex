@@ -2,7 +2,65 @@ defmodule TwoRavens.CLI do
   @moduledoc false
 
   alias TwoRavens.Authoring.Candidate
+  alias TwoRavens.Change.Receipt
   alias TwoRavens.Context.Result
+
+  @spec decode_change(String.t()) :: {:ok, map()} | {:error, map()}
+  def decode_change(source) when is_binary(source) do
+    case Jason.decode(source) do
+      {:ok, request} when is_map(request) -> {:ok, request}
+      {:ok, _value} -> {:error, %{code: :invalid_change_json, reason: :object_required}}
+      {:error, error} -> {:error, %{code: :invalid_change_json, reason: Exception.message(error)}}
+    end
+  end
+
+  @spec change(Receipt.t()) :: String.t()
+  def change(%Receipt{} = receipt) do
+    body =
+      [
+        "status #{receipt.status}",
+        "operations #{receipt.operation_count}",
+        optional_line("revision", receipt.revision),
+        draft_line(receipt),
+        count_line("entities", receipt.entities),
+        count_line("relationships", receipt.relationships),
+        qualification_line(receipt.qualification),
+        "affected_paths #{receipt.affected_paths}",
+        "working_tree #{if(receipt.working_tree_changed, do: "changed", else: "unchanged")}"
+      ] ++ Enum.map(receipt.diagnostics || [], &"diagnostic #{compact_inspect(&1)}")
+
+    body |> Enum.reject(&is_nil/1) |> Enum.join("\n") |> with_output_bytes()
+  end
+
+  @spec draft_context(map()) :: String.t()
+  def draft_context(context) when is_map(context) do
+    entity = context.entity
+
+    [
+      "draft #{context.draft} version=#{context.version} status=#{context.status}",
+      "entity #{entity.id}",
+      list_line("callers", context.callers),
+      list_line("callees", context.callees),
+      list_line("clauses", context.clauses)
+    ]
+    |> Kernel.++(Enum.map(context.diagnostics, &"diagnostic #{compact_inspect(&1)}"))
+    |> Enum.join("\n")
+    |> with_output_bytes()
+  end
+
+  @spec revision(String.t()) :: String.t()
+  def revision(revision), do: "revision #{revision}" |> with_output_bytes()
+
+  @spec entities([String.t()]) :: String.t()
+  def entities(entities) do
+    entities
+    |> Enum.map_join("\n", &"entity #{&1}")
+    |> case do
+      "" -> "entities none"
+      lines -> lines
+    end
+    |> with_output_bytes()
+  end
 
   @spec candidate(Candidate.t(), keyword()) :: String.t()
   def candidate(candidate, options \\ [])
@@ -29,9 +87,44 @@ defmodule TwoRavens.CLI do
 
   @spec error(map()) :: String.t()
   def error(%{code: code} = reason) do
-    details = reason |> Map.delete(:code) |> inspect(pretty: false, limit: 20)
+    details = reason |> plain_map() |> Map.delete(:code) |> inspect(pretty: false, limit: 20)
     "#{code}: #{details}"
   end
+
+  defp draft_line(%Receipt{draft: nil}), do: nil
+
+  defp draft_line(%Receipt{} = receipt),
+    do: "draft #{receipt.draft} version=#{receipt.draft_version}"
+
+  defp optional_line(_label, nil), do: nil
+  defp optional_line(label, value), do: "#{label} #{value}"
+
+  defp count_line(label, values) when values in [nil, %{}], do: "#{label} none"
+
+  defp count_line(label, values) do
+    counts =
+      values
+      |> Enum.sort_by(fn {key, _value} -> to_string(key) end)
+      |> Enum.map_join(" ", fn {key, value} -> "#{key}=#{value}" end)
+
+    "#{label} #{counts}"
+  end
+
+  defp qualification_line(nil), do: "qualification unavailable"
+
+  defp qualification_line(qualification) do
+    "qualification format=#{qualification.format} compile=#{qualification.compile} " <>
+      "tests=#{qualification.tests} commands=#{qualification.commands} " <>
+      "output_bytes=#{qualification.output_bytes}"
+  end
+
+  defp list_line(label, []), do: "#{label} none"
+  defp list_line(label, values), do: "#{label} #{Enum.join(values, " ")}"
+
+  defp compact_inspect(value), do: inspect(value, pretty: false, limit: 20, printable_limit: 500)
+
+  defp plain_map(%{__struct__: _struct} = value), do: Map.from_struct(value)
+  defp plain_map(value), do: value
 
   defp compact_candidate(%Candidate{applied: true} = candidate) do
     receipt = Map.fetch!(candidate.semantic, :receipt)

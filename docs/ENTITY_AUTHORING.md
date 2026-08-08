@@ -372,6 +372,42 @@ Large Elixir remains one string per entity operation. The JSON envelope contains
 only operation identity and safety fields. Context queries and mutation
 receipts stay compact and never return the whole draft unless requested.
 
+## Local CLI transport
+
+The same request can be submitted from a local agent without shell-escaping the
+embedded Elixir. Write the JSON object to a temporary file outside the managed
+project, then run:
+
+```powershell
+mix ravens change --root PATH --request REQUEST.json
+```
+
+Standard input is also supported:
+
+```powershell
+mix ravens change --root PATH --stdin
+```
+
+Exactly one input mechanism is required. The CLI returns the same status,
+operation counts, draft/revision identity, qualification summary, affected-path
+count, diagnostics, and working-tree truth as the decoded-map API, formatted as
+compact line-oriented text.
+
+Query one retained draft entity without returning the complete draft source:
+
+```powershell
+mix ravens draft-context DRAFT_ID VERSION function:MODULE.name/arity --root PATH
+```
+
+Before editing an existing managed project, obtain its exact revision and
+discover semantic identities without reading source files:
+
+```powershell
+mix ravens revision --root PATH
+mix ravens entities --root PATH
+mix ravens context function:MODULE.name/arity --root PATH --for-edit
+```
+
 ## Required safety behavior
 
 - Validate every public field before project access.

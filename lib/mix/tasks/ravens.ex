@@ -1,19 +1,25 @@
 defmodule Mix.Tasks.Ravens do
   use Mix.Task
 
-  @shortdoc "Authors and queries 2Ravens-managed greenfield Elixir source"
+  @shortdoc "Authors and queries 2Ravens-managed Elixir entities"
 
   @moduledoc """
-  Thin CLI adapter for `TwoRavens.Authoring` and `TwoRavens.Context`.
+  Thin CLI adapter for `TwoRavens.Authoring`, `TwoRavens.Change`, and
+  `TwoRavens.Context`.
 
       mix ravens init --root PATH
       mix ravens create module MODULE --root PATH [--test] [--intent TEXT] [--for TARGET]
       mix ravens create function MODULE --root PATH --stdin [--intent TEXT] [--apply]
       mix ravens context function:MODULE.name/arity --root PATH [--include FIELDS]
       mix ravens set HANDLE.operator OPERATOR --root PATH [--intent TEXT] [--apply]
+      mix ravens change --root PATH (--stdin | --request JSON_FILE)
+      mix ravens draft-context DRAFT VERSION FOCUS --root PATH
+      mix ravens revision --root PATH
+      mix ravens entities --root PATH
   """
 
   alias TwoRavens.Authoring
+  alias TwoRavens.Change
   alias TwoRavens.CLI
   alias TwoRavens.Context
 
@@ -27,7 +33,8 @@ defmodule Mix.Tasks.Ravens do
     for: :keep,
     include: :string,
     compact: :boolean,
-    details: :boolean
+    details: :boolean,
+    request: :string
   ]
 
   @impl Mix.Task
@@ -100,6 +107,35 @@ defmodule Mix.Tasks.Ravens do
     |> formatted(&CLI.candidate(&1, details: Keyword.get(options, :details, false)))
   end
 
+  defp dispatch(["change"], root, options) do
+    with {:ok, input} <- read_change_input(options),
+         {:ok, request} <- CLI.decode_change(input) do
+      Change.submit(root, request)
+      |> formatted(&CLI.change/1)
+    end
+  end
+
+  defp dispatch(["draft-context", draft, version, focus], root, _options) do
+    case Integer.parse(version) do
+      {parsed_version, ""} ->
+        Change.draft_context(root, draft, parsed_version, focus)
+        |> formatted(&CLI.draft_context/1)
+
+      _other ->
+        {:error, %{code: :invalid_draft_version, value: version}}
+    end
+  end
+
+  defp dispatch(["revision"], root, _options) do
+    Change.current_revision(root)
+    |> formatted(&CLI.revision/1)
+  end
+
+  defp dispatch(["entities"], root, _options) do
+    Change.entities(root)
+    |> formatted(&CLI.entities/1)
+  end
+
   defp dispatch(_command, _root, _options), do: {:error, %{code: :unsupported_command}}
 
   defp read_optional_stdin(options) do
@@ -117,6 +153,22 @@ defmodule Mix.Tasks.Ravens do
     case IO.binread(:stdio, :eof) do
       source when is_binary(source) -> {:ok, source}
       {:error, reason} -> {:error, %{code: :stdin_read_failed, reason: reason}}
+    end
+  end
+
+  defp read_change_input(options) do
+    case {Keyword.get(options, :stdin, false), Keyword.get(options, :request)} do
+      {true, nil} -> read_stdin()
+      {false, path} when is_binary(path) -> read_request(path)
+      {false, nil} -> {:error, %{code: :change_input_required}}
+      {true, _path} -> {:error, %{code: :conflicting_change_inputs}}
+    end
+  end
+
+  defp read_request(path) do
+    case File.read(path) do
+      {:ok, source} -> {:ok, source}
+      {:error, reason} -> {:error, %{code: :request_read_failed, path: path, reason: reason}}
     end
   end
 

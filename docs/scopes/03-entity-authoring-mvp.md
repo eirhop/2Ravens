@@ -6,9 +6,10 @@ First vertical slice implemented; completion gate not yet met.
 
 The current implementation provides strict ordered requests, multi-module
 source bundles, exact function/clause/module-form operations, versioned SQLite
-drafts for qualification failures, one qualification per batch, and atomic
-managed-path materialization. The focused integration suite exercises these
-paths through the decoded-map MCP adapter.
+drafts for qualification failures, one qualification per batch, atomic
+managed-path materialization, and `mix ravens change`/`draft-context` local CLI
+transport. The focused integration suite exercises these paths across separate
+CLI processes and through the decoded-map MCP adapter.
 
 The following scope requirements remain explicit gaps:
 
@@ -77,8 +78,9 @@ diagnostics, and no working-tree changes. Malformed public arguments, unsafe
 roots, stale draft versions, and unavailable projects return structured errors.
 
 Add a transport adapter that accepts the decoded JSON-shaped map intended for a
-future `ravens_change` MCP tool and delegates to the same facade. Do not build a
-general MCP server in this scope.
+future `ravens_change` MCP tool and delegates to the same facade. A small local
+CLI may submit the identical JSON through standard input or a request file. Do
+not build a general MCP server in this scope.
 
 ## Request contract
 
