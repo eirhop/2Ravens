@@ -142,15 +142,23 @@ defmodule TwoRavens.CLIGreenfieldMVPTest do
     assert {context_output, 0} =
              run_cli(mix, ["ravens", "context", focus, "--root", root, "--for-edit"])
 
-    assert context_output =~ "caller function:RavensShop.Pricing.total/2"
-    assert context_output =~ "related test RavensShop.PricingTest"
+    assert context_output =~ "caller source_derived function:RavensShop.Pricing.total/2"
+    assert context_output =~ "test source_derived RavensShop.PricingTest statically_related"
     assert [_, handle] = Regex.run(~r/editable (rv1_[A-Za-z0-9_-]+)\.operator/, context_output)
 
     pricing_path = Path.join(root, "lib/ravens_shop/pricing.ex")
     before_dry_run = File.read!(pricing_path)
 
     assert {dry_output, 0} =
-             run_cli(mix, ["ravens", "set", handle <> ".operator", ">", "--root", root])
+             run_cli(mix, [
+               "ravens",
+               "set",
+               handle <> ".operator",
+               ">",
+               "--root",
+               root,
+               "--details"
+             ])
 
     assert dry_output =~ "candidate dry-run"
     assert dry_output =~ "compile pass"
@@ -173,8 +181,8 @@ defmodule TwoRavens.CLIGreenfieldMVPTest do
              ])
 
     assert apply_output =~ "candidate applied"
-    assert apply_output =~ "compile pass"
-    assert apply_output =~ "tests pass"
+    assert apply_output =~ "compile=pass"
+    assert apply_output =~ "test=pass"
     assert File.read!(pricing_path) =~ "subtotal > 5_000"
 
     assert {:ok, graph} = Source.rebuild(root)

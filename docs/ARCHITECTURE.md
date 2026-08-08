@@ -2,10 +2,10 @@
 
 ## Status
 
-This document defines the shared architecture for the greenfield MVP and the
+This document defines the shared architecture for the MVP experiments and the
 three-phase product plan. It commits the project to a local deterministic
-repository graph, not to an umbrella structure, persistent store, native
-extension, UI renderer, or runtime transport.
+repository graph and a bounded embedded SQLite semantic-memory experiment, not
+to an umbrella structure, hosted store, UI renderer, or runtime transport.
 
 The repository is currently one Mix application and should remain simple until
 validated workflows demonstrate boundaries that need independent ownership,
@@ -53,16 +53,19 @@ boundaries until implementation experience proves that separation useful.
 ## System model
 
 ```text
-Normal Elixir input ─→ authoring candidate ─→ managed source files
-                                             ↓
-Source files ───────┐
-Git revisions ──────┤
-Compiler evidence ──┤
-Test observations ──┼→ fact producers → repository evidence graph
-Runtime sessions ───┘                         ↓
-                                    deterministic graph slices
-                                               ↓
-                              CLI / MCP / review UI / explorer
+Normal Elixir + intent ─→ authoring candidate ─→ managed source files
+           │                       │                      │
+           │                       └→ requested facts     │
+           │                                              ↓
+           └────────────────────────────────────→ fact producers
+                                                          │
+Source files / Git / compiler / tests / runtime ───────────┤
+                                                          ↓
+                                     embedded semantic memory
+                                                          ↓
+                                      deterministic graph slices
+                                                          ↓
+                                     CLI / MCP / review UI / explorer
 ```
 
 The graph is built independently of a particular task. An agent interprets the
@@ -77,7 +80,8 @@ Git when present = named revision authority
 File hashes = current working revision
 Tests = behavioral evidence
 Runtime sessions = observed evidence
-Repository graph = regenerable projection
+Embedded database = operational semantic memory at one revision
+Repository graph = source-derived and memory-enriched projection
 ```
 
 2Ravens keeps a small versioned manifest of paths it created during the MVP;
@@ -88,6 +92,32 @@ Elixir constructs are indexed because they are already part of the system.
 
 When a relationship cannot be derived, the graph records it as unresolved or
 unknown rather than adding a duplicated declaration that can become stale.
+
+## Persistent semantic memory experiment
+
+Scope 02 stores stable entities, requested intent, derived relationships,
+evidence, source projections, and accepted operations in local SQLite beneath
+the validated `.ravens/` directory.
+
+```text
+requested knowledge ─┐
+derived knowledge ───┼→ versioned semantic store → compact context
+observed evidence ───┘
+```
+
+Use `Exqlite` directly behind `TwoRavens.SemanticStore`; do not add Ecto or
+expose SQL to agents. The MVP uses short-lived connections and serialized CLI
+writes. SQLite is selected only for this local experiment.
+
+Requested, derived, and observed facts retain separate origins. Passing tests
+provide revision evidence but do not establish per-function runtime coverage.
+The complete hypothesis and evidence contract are in
+[Authoring-time semantic memory](SEMANTIC_MEMORY.md).
+
+The database is local operational state and is not committed to Git. If it is
+missing, 2Ravens rebuilds source-derived facts and reports requested intent as
+unavailable. Portable export and branch synchronization are deferred until the
+lifecycle benchmark demonstrates value.
 
 ## Graph layers
 
@@ -495,6 +525,7 @@ candidate graph and source patch
 -> explicit apply
 -> working-tree source
 -> re-indexed graph
+-> accepted semantic-memory transaction
 ```
 
 An edit handle is a compact revision-bound alias for one canonical graph node,
@@ -514,14 +545,18 @@ to derive relationships and evidence.
 Before apply, 2Ravens materializes the candidate source, rebuilds affected graph
 fragments, and compares that rebuilt graph with the candidate graph. A mismatch
 is an error, not an automatic repair. Apply verifies the base hashes, writes the
-ordinary source patch, and re-indexes the result. It does not commit to Git.
+ordinary source patch, re-indexes the result, and persists accepted semantic
+facts transactionally with compensating source rollback. It does not commit to
+Git.
 
 The complete contract and MVP plan are in [Semantic editing](EDITING.md).
 
 ## Index updates
 
-The MVP explicitly rebuilds its managed per-file fragments for each command.
-Once Phase 1 requires continuous updates, use the same fragment boundary:
+Scope 01 explicitly rebuilds managed per-file fragments for each command. Scope
+02 first verifies stored file hashes. Current stores serve context directly;
+stale stores rebuild affected managed fragments and reconcile only derived
+facts. Once Phase 1 requires continuous updates, use the same fragment boundary:
 
 ```text
 File event
@@ -541,7 +576,7 @@ The core operation belongs to an ordinary Elixir API. Transports remain thin:
 
 ```text
 mix ravens context ─┐
-local MCP context ──┼→ TwoRavens.Context → Munin graph
+local MCP context ──┼→ TwoRavens.Context → semantic store + Munin graph
 future local UI ────┘
 
 mix ravens create/set [--apply] → TwoRavens.Authoring → candidate → source patch
@@ -566,6 +601,14 @@ MCP is a transport, not the domain architecture.
 - Qualify every applied candidate through source round-trip, compilation, and
   tests.
 
+### MVP foundation — persistent semantic memory
+
+- Persist stable entities, requested intent, derived facts, and evidence.
+- Reuse current memory across independent CLI processes.
+- Reconcile stale or missing stores without inventing intent.
+- Return compact context and mutation receipts.
+- Compare cumulative context across files, source indexing, and semantic memory.
+
 ### Phase 1 — possible behavior
 
 - Build the local repository supergraph.
@@ -586,9 +629,9 @@ MCP is a transport, not the domain architecture.
 - Highlight the actual trace inside the possible envelope.
 - Replay the captured evidence without claiming unsupported causality.
 
-## Initial implementation direction
+## Current implementation direction
 
-The MVP should begin with:
+Scope 01 implemented:
 
 - One Mix application
 - Small modules separated by explicit data contracts
@@ -601,15 +644,26 @@ The MVP should begin with:
 - CLI-first creation, candidate qualification, context, `set`, and `--apply`
 - Disposable greenfield-project integration tests
 
+Scope 02 adds:
+
+- One local SQLite file beneath `.ravens/`
+- `Exqlite` behind a small semantic-store boundary without Ecto
+- Versioned migrations and constrained relational tables
+- Stable entity IDs separate from semantic keys
+- Requested intent and intended-test relationships
+- Persisted derived facts and qualification evidence with explicit origins
+- Source/store freshness and reconciliation
+- Compact success output
+- A three-condition cumulative lifecycle benchmark
+
 Phase 1 later adds general repository indexing, compiler reconciliation, the
 complete context query, real-repository benchmarks, and one local STDIO MCP
-adapter. Persistence, continuous watching, tolerant parsing, and alternative
-embedded stores remain evidence-driven choices.
+adapter. Continuous watching, tolerant parsing, alternative embedded stores,
+and portable semantic synchronization remain evidence-driven choices.
 
 ## Decisions intentionally deferred
 
 - Umbrella application boundaries
-- Persistent embedded graph storage technology
 - Tolerant incomplete-source parser
 - Production graph visualization library
 - Runtime-agent transport and isolation model
@@ -617,6 +671,8 @@ embedded stores remain evidence-driven choices.
 - Production observation
 - MCP write tools
 - Persistent candidate storage
+- Portable semantic-memory export, merge, and synchronization
+- Alternative embedded storage technology
 - General brownfield importing during the MVP
 - Semantic edit operations beyond the validated creation and `set` slices
 
@@ -625,7 +681,8 @@ All future choices must preserve local operation and inspectable results.
 ## Architectural principles
 
 1. Build the repository graph independently of a user task.
-2. Derive relationships from code and evidence rather than custom annotations.
+2. Preserve requested intent with provenance; derive structural and behavioral
+   relationships from code and evidence rather than custom annotations.
 3. Source and Git when present remain authoritative; tests and runtime provide
    evidence.
 4. Every fact has inspectable provenance, confidence, revision, and freshness.

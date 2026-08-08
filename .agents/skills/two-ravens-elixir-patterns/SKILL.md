@@ -19,9 +19,11 @@ identity and domain values
         |
 source loading -> parsing -> fact extraction
         |
-graph assembly and queries
+graph assembly
         |
-authoring operations -> qualification -> materialization
+semantic store adapter and reconciliation
+        |
+context queries and authoring operations -> qualification -> materialization
         |
 CLI adapters
 ```
@@ -58,6 +60,7 @@ validate input
 -> atomically write ordinary files
 -> rebuild accepted graph
 -> compare semantic signatures
+-> persist accepted semantic memory
 -> return applied result
 ```
 
@@ -75,12 +78,21 @@ same-directory atomic file replacement. On any returned post-write failure,
 restore and byte-verify the snapshot. Return `:rollback_failed` with both the
 original and rollback failures when recovery cannot be proven.
 
+When semantic persistence participates, begin the SQLite transaction only after
+qualification and base-hash verification. Commit only after source read-back and
+stored semantic signatures agree. Roll back SQLite and restore source on every
+returned post-write failure. On later startup, source/store hash mismatch enters
+reconciliation and must never be served as current context.
+
 ## Require evidence before rendering a claim
 
 Represent evidence with fixed structs and explicit states such as `:pass`,
 `:not_run`, or `%{status: :unknown, reason: reason}`.
 
-- Derive calls, tests, and graph edges from managed source only.
+- Derive structural calls and static test edges from managed source only.
+- Accept requested intent relationships only through validated authoring input,
+  label them `:requested`, and never promote them to derived or observed truth.
+- A passing suite is revision evidence, not observed per-function coverage.
 - Fail duplicate semantic identities with their source locations; never let
   `Map.put/3` silently choose a winner.
 - Do not infer behavior from a literal appearing somewhere in a related file.
@@ -104,12 +116,15 @@ Keep these responsibilities independently testable:
 - fact extractor: derive calls and editable comparisons;
 - range helper: construct exact repository-relative source locations;
 - graph: validate unique identities, assemble edges, and traverse relationships.
+- semantic store: persist fixed domain values, origins, revisions, and evidence
+  with bound SQL and reconcile only derived facts.
 
 Use one file per public domain struct. Prefer pure functions in the parser,
 extractor, graph, and candidate builder. Keep filesystem reads inside
 `Project`, `Manifest`, `Source.Loader`, and explicit unmanaged-collision
 discovery. Keep writes and subprocess effects inside `Manifest`, `Qualifier`,
-and `Materializer` boundaries.
+`Materializer`, and `SemanticStore.SQLite` boundaries. No parser, graph, context,
+or CLI module may call Exqlite directly.
 
 ## Validate public inputs once
 
@@ -129,3 +144,10 @@ Instrument benchmarks from recorded events. Use identical timing endpoints and
 clearly define input, author-facing output, qualification output, tool-call, and
 subprocess counts. Keep unavailable token metrics unavailable and state an
 unfavorable result plainly.
+
+For semantic-memory changes, also prove migration idempotency, bound public SQL
+values, independent-process reuse, missing-store reconstruction without invented
+intent, stale-store reconciliation, SQL/source rollback, and requested versus
+derived versus observed provenance. Measure cumulative tool-result/context
+bytes across a frozen lifecycle; wall time is diagnostic rather than the product
+gate.

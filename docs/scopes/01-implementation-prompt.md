@@ -1,5 +1,8 @@
 # Implementation prompt — Greenfield semantic authoring MVP
 
+> Historical prompt. Scope 01 was implemented in commit `b85d23d`. Use the
+> [Scope 02 prompt](02-implementation-prompt.md) for current development.
+
 Copy the prompt below into a development task from the root of the 2Ravens
 repository.
 

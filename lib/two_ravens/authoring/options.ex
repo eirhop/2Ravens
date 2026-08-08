@@ -1,7 +1,11 @@
 defmodule TwoRavens.Authoring.Options do
   @moduledoc false
 
-  @type rule :: {:boolean, boolean()} | {:binary, String.t()}
+  @type rule ::
+          {:boolean, boolean()}
+          | {:binary, String.t()}
+          | {:optional_text, nil}
+          | {:binary_list, [String.t()]}
 
   @spec validate(term(), keyword(rule())) :: {:ok, map()} | {:error, map()}
   def validate(options, schema) when is_list(options) do
@@ -37,10 +41,12 @@ defmodule TwoRavens.Authoring.Options do
   end
 
   defp validation_result(key, type, value, values) do
-    if valid?(type, value) do
-      {:cont, {:ok, Map.put(values, key, value)}}
-    else
-      {:halt, {:error, %{code: :invalid_option, option: key, expected: type, value: value}}}
+    case normalize(type, value) do
+      {:ok, normalized} ->
+        {:cont, {:ok, Map.put(values, key, normalized)}}
+
+      :error ->
+        {:halt, {:error, %{code: :invalid_option, option: key, expected: type, value: value}}}
     end
   end
 
@@ -55,4 +61,26 @@ defmodule TwoRavens.Authoring.Options do
 
   defp valid?(:boolean, value), do: is_boolean(value)
   defp valid?(:binary, value), do: is_binary(value)
+  defp valid?(:optional_text, _value), do: false
+  defp valid?(:binary_list, _value), do: false
+
+  defp normalize(:optional_text, nil), do: {:ok, nil}
+
+  defp normalize(:optional_text, value) when is_binary(value) do
+    normalized = String.trim(value)
+
+    if String.valid?(value) and byte_size(normalized) in 1..1000,
+      do: {:ok, normalized},
+      else: :error
+  end
+
+  defp normalize(:binary_list, values) when is_list(values) do
+    if Enum.all?(values, &(is_binary(&1) and String.valid?(&1) and byte_size(&1) in 1..512)),
+      do: {:ok, values},
+      else: :error
+  end
+
+  defp normalize(type, value) do
+    if valid?(type, value), do: {:ok, value}, else: :error
+  end
 end

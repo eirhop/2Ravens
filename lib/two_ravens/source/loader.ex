@@ -22,6 +22,24 @@ defmodule TwoRavens.Source.Loader do
     rebuild_with(project, manifest, %{})
   end
 
+  @spec revision(Project.t(), Manifest.t()) ::
+          {:ok, TwoRavens.Repository.Revision.t()} | {:error, map()}
+  def revision(%Project{} = project, %Manifest{} = manifest) do
+    result =
+      Enum.reduce_while(manifest.managed_paths, {:ok, %{}}, fn path, {:ok, hashes} ->
+        with {:ok, absolute} <- Project.resolve(project, path),
+             {:ok, source} <- read_managed(absolute, path) do
+          {:cont, {:ok, Map.put(hashes, path, Repository.hash(source))}}
+        else
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+
+    with {:ok, hashes} <- result do
+      {:ok, Repository.revision(project.root, hashes)}
+    end
+  end
+
   @spec rebuild_with(Project.t(), Manifest.t(), %{String.t() => String.t()}) ::
           {:ok, Graph.t()} | {:error, map()}
   def rebuild_with(%Project{} = project, %Manifest{} = manifest, candidate_files)

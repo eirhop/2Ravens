@@ -2,8 +2,9 @@
 
 ## Product thesis
 
-2Ravens turns ordinary Elixir into a queryable and safely editable execution
-map.
+2Ravens captures and derives a local semantic memory of an Elixir system so AI
+and humans can query the smallest trustworthy context needed for later changes
+and review.
 
 Today, a capable coding agent often builds that map manually:
 
@@ -19,18 +20,20 @@ Task
 ```
 
 2Ravens should make the repository-understanding portion available in one to
-three deterministic graph queries.
+three deterministic graph queries. When code is created through 2Ravens, it may
+also preserve concise intent and requested relationships that source indexing
+cannot reconstruct later.
 
-The first MVP starts one step earlier: it lets an AI create a constrained
-greenfield Elixir system through 2Ravens, derives its relationships, and proves
-that every accepted semantic model round-trips through ordinary source. This
-write-first foundation tests the complete authoring loop before the project
-attempts to import arbitrary brownfield repositories.
+The completed first MVP proved safe greenfield authoring, derived relationships,
+and deterministic source round trips. Its mechanics benchmark did not show an
+efficiency advantage, and model token counts were unavailable. The next MVP
+tests whether persistent authoring-time semantic memory amortizes its initial
+overhead across repeated later tasks.
 
 ```text
-Source + compiler + tests + Git + local runtime observations
-                            ↓
-                   Repository evidence graph
+Intent + source + compiler + tests + Git + local runtime observations
+                                  ↓
+                       Local semantic memory
                             ↓
                    Explicit graph-slice query
              ┌──────────────┼──────────────┐
@@ -55,9 +58,10 @@ reinterpret the agent's intent.
 See the complete [context-query contract](QUERY.md).
 
 The [semantic-editing](EDITING.md) MVP creates trustworthy revision-bound
-identities while authoring a small managed project. It accepts normal Elixir for
-substantial additions and compact property operations for small known edits.
-Graph storage does not become authoritative.
+identities while authoring a small managed project. The
+[semantic-memory experiment](SEMANTIC_MEMORY.md) persists stable entities,
+requested intent, derived facts, and evidence locally. The embedded store is an
+operational memory, not the canonical source-code store.
 
 General repository understanding remains the Phase 1 destination. The MVP only
 reads files that it created and recorded as managed; it is not a brownfield
@@ -112,15 +116,16 @@ trustworthy.
 
 ## MVP foundation
 
-Before Phase 1, 2Ravens proves one bounded write-and-read loop:
+Before Phase 1, 2Ravens runs two bounded experiments:
 
-| Foundation | Product question | Primary proof |
-| --- | --- | --- |
-| Greenfield semantic authoring | Can an AI create and safely change a small Elixir system through 2Ravens? | Created source remains ordinary Elixir; derived relationships, minimal edits, qualification, and source-to-graph reconstruction are deterministic. |
+| Foundation | Status | Product question | Primary proof |
+| --- | --- | --- | --- |
+| Greenfield semantic authoring | Implemented | Can an AI create and safely change a small Elixir system through 2Ravens? | Created source remains ordinary Elixir; derived relationships, minimal edits, qualification, and source-to-graph reconstruction are deterministic. |
+| Persistent semantic memory | Active | Does authoring-time intent and evidence reduce cumulative context across later work? | Semantic memory preserves facts unavailable to indexing and reaches context break-even without reducing correctness. |
 
-The foundation is intentionally narrower than the long-term product. It manages
-only its own files and supported Elixir subset. Comprehensive brownfield
-indexing begins after this gate.
+The foundation remains narrower than the long-term product. It manages only its
+own files and supported Elixir subset. Comprehensive brownfield indexing begins
+after the semantic-memory gate.
 
 ## The three phases
 
@@ -139,9 +144,10 @@ validated.
 ### Repository graph
 
 The long-term graph represents the complete set of statically knowable
-relationships in the repository. The MVP graph contains only supported facts
-from 2Ravens-managed files. In both cases, unsupported or dynamic behavior is
-represented as unresolved rather than omitted or guessed.
+relationships in the repository plus requested intent and observed evidence.
+The MVP graph contains only supported facts from 2Ravens-managed files. In both
+cases, unsupported or dynamic behavior is represented as unresolved rather than
+omitted or guessed.
 
 ### Execution envelope
 
@@ -186,6 +192,15 @@ inside the execution envelope. Possible but unobserved paths remain visible.
 
 ### Facts and evidence
 
+Persisted facts retain one of three roles:
+
+- Requested knowledge supplied as intent or a claim
+- Derived knowledge from source or compiler evidence
+- Observed evidence from tests or runtime capture
+
+The complete contract is in
+[Authoring-time semantic memory](SEMANTIC_MEMORY.md).
+
 A relationship may have several evidence records:
 
 ```text
@@ -217,11 +232,12 @@ its provenance.
 
 ## Planning principles
 
-### Derive the graph from source and slice it many ways
+### Preserve intent, derive facts, and slice them many ways
 
-The MVP rebuilds its small graph from managed source on each command. Later
-phases may maintain a warm index independently of a user task. Queries choose
-focus, directions, relationships, stopping points, constraints, and limits.
+Requested intent is stored with provenance when the author already knows it.
+Definitions, calls, tests, and effects remain derived from source and evidence.
+Queries choose focus, directions, relationships, stopping points, constraints,
+and limits.
 
 ### Derive facts from the system
 
@@ -257,9 +273,9 @@ semantics; real repositories prove product value.
 
 ## Decisions intentionally deferred
 
-The product plan does not yet select:
+The product plan selects local SQLite only for the bounded semantic-memory
+experiment. It does not yet select:
 
-- A persistent embedded graph store
 - Tree-sitter or another incomplete-source parser
 - An umbrella application structure
 - A production UI graph renderer

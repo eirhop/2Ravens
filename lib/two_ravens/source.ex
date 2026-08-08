@@ -23,6 +23,11 @@ defmodule TwoRavens.Source do
           {:ok, TwoRavens.Graph.t()} | {:error, map()}
   defdelegate rebuild_with(project, manifest, candidate_files), to: Loader
 
+  @doc "Computes managed file hashes without parsing or rebuilding the graph."
+  @spec revision(Project.t(), Manifest.t()) ::
+          {:ok, TwoRavens.Repository.Revision.t()} | {:error, map()}
+  defdelegate revision(project, manifest), to: Loader
+
   @doc "Parses one managed file without evaluating application source."
   @spec parse(String.t(), String.t()) :: {:ok, Fragment.t()} | {:error, map()}
   defdelegate parse(path, source), to: Parser

@@ -2,11 +2,12 @@
 
 ## Planning rule
 
-2Ravens begins with one managed-authoring MVP, followed by three product phases
-built on the same source-derived graph:
+2Ravens begins with two bounded MVP experiments, followed by three product
+phases built on the same semantic evidence graph:
 
 ```text
-MVP: greenfield semantic authoring
+MVP 1: greenfield semantic authoring — implemented
+MVP 2: persistent semantic memory — active
 Phase 1: possible execution
 Phase 2: changed possibilities
 Phase 3: observed execution
@@ -17,15 +18,15 @@ before product development moves to the next.
 
 ## Current status
 
-**Greenfield semantic-authoring MVP ready for implementation**
+**Persistent semantic-memory MVP ready for implementation**
 
-The immediate work is to prove that 2Ravens can create and safely change a
-small ordinary Elixir application. It will derive a narrow graph from only the
-files it manages, qualify every applied change, and reconstruct the same graph
-from generated source. General brownfield indexing remains the next Phase 1
-expansion.
+Scope 01 proved safe source materialization, qualification, semantic editing,
+and deterministic graph reconstruction. Its mechanics benchmark was
+unfavorable and model token counts were unavailable. The immediate work is to
+test whether persisted authoring intent and evidence reduce cumulative model
+context over repeated later tasks.
 
-## MVP foundation — managed semantic authoring
+## MVP foundation 1 — managed semantic authoring
 
 [Developer scope](scopes/01-greenfield-authoring-mvp.md) ·
 [Semantic-editing contract](EDITING.md)
@@ -34,6 +35,8 @@ Goal:
 
 > Let an AI create, inspect, and safely change a small greenfield Elixir system
 > through 2Ravens while keeping ordinary source and Git recoverable.
+
+Status: implemented in `b85d23d`.
 
 Milestones:
 
@@ -56,8 +59,43 @@ Gate:
 - Applied changes affect only intended managed paths.
 - The end-to-end workflow is no less correct than direct file editing.
 
-Do not add a database, daemon, MCP write tool, UI, custom language, or general
-brownfield importer before this gate passes.
+The technical gate passed. The mechanics comparison did not show efficiency,
+so more authoring verbs remain deferred. It justified only the bounded semantic
+memory experiment below, not broader infrastructure.
+
+## MVP foundation 2 — persistent semantic memory
+
+[Hypothesis and decision gate](SEMANTIC_MEMORY.md) ·
+[Developer scope](scopes/02-semantic-memory-mvp.md)
+
+Goal:
+
+> Preserve authoring-time knowledge that source indexing loses and determine
+> whether it reduces cumulative context across later AI work.
+
+Milestones:
+
+1. Add a local SQLite semantic store behind a small adapter.
+2. Persist stable entities, concise intent, typed relations, evidence, source
+   projections, and accepted operations.
+3. Keep requested, source-derived, compiler-confirmed, test-observed, and
+   reconstructed origins separate.
+4. Reuse current memory across independent CLI processes.
+5. Detect source/store drift and reconcile only derived facts.
+6. Return compact successful receipts and focused context by default.
+7. Compare files-only, source-indexed, and semantic-memory lifecycle conditions.
+8. Report cumulative context break-even or failure honestly.
+
+Gate:
+
+- Semantic memory preserves useful facts unavailable to indexing.
+- It reaches cumulative context break-even within the frozen task sequence.
+- Later tasks use less cumulative model input after break-even.
+- Correctness is preserved or improved.
+- Freshness, provenance, uncertainty, and missing intent remain explicit.
+
+Do not add Ecto, a graph database, portable synchronization, MCP writes, UI,
+brownfield import, or more edit verbs before this gate passes.
 
 ## Preparation — contract and benchmark
 
@@ -178,12 +216,12 @@ validation while preserving local operation:
 
 ## Immediate next milestone
 
-[Developer scope: greenfield semantic authoring MVP](scopes/01-greenfield-authoring-mvp.md)
+[Developer scope: persistent semantic memory MVP](scopes/02-semantic-memory-mvp.md)
 
-Implement the scope checkpoint by checkpoint, beginning with a disposable Mix
-project and one generated module. The milestone passes when the complete
-two-module creation, relationship query, one-token edit, qualification, apply,
-and read-back workflow succeeds through ordinary Elixir APIs and `mix ravens`.
+Implement SQLite migrations and round-trip one stable entity plus requested
+intent first. Then persist accepted derived facts and evidence, serve compact
+fresh-process context, reconcile stale or missing stores, and run the frozen
+three-condition lifecycle benchmark.
 
-Use the [copy-paste implementation prompt](scopes/01-implementation-prompt.md)
+Use the [copy-paste implementation prompt](scopes/02-implementation-prompt.md)
 to hand the bounded scope to a developer.

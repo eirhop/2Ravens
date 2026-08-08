@@ -166,7 +166,7 @@ defmodule TwoRavens.GreenfieldMVPTest do
       )
 
     assert cli_output =~ "revision #{String.slice(rebuilt.revision.working_hash, 0, 12)}"
-    assert cli_output =~ "related test RavensShop.PricingTest"
+    assert cli_output =~ "test source_derived RavensShop.PricingTest statically_related"
     assert cli_output =~ "frontier unmanaged repository source is outside the MVP index"
   end
 end

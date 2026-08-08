@@ -86,6 +86,21 @@ defmodule TwoRavens.AuthoringSafetyTest do
     refute File.exists?(Path.join(outside, "owned.ex"))
   end
 
+  test "semantic metadata rejects a linked .ravens directory before any outside write", %{
+    root: root
+  } do
+    outside = root <> "-semantic-outside"
+    link = Path.join(root, ".ravens")
+    File.mkdir_p!(outside)
+    on_exit(fn -> File.rm_rf(outside) end)
+
+    assert :ok = create_directory_link(outside, link)
+    assert {:error, %{code: :unsafe_managed_path, reason: :symbolic_link}} = Authoring.init(root)
+    refute File.exists?(Path.join(outside, "manifest"))
+    refute File.exists?(Path.join(outside, "semantic.sqlite3"))
+    refute File.exists?(Path.join(outside, ".gitignore"))
+  end
+
   test "boundary output distinguishes proved truth from unknown impact" do
     comparison = %Comparison{
       id: "comparison:1",

@@ -13,9 +13,11 @@ defmodule TwoRavens.CreateModule do
     with {:ok, project} <- Project.open(root),
          {:ok, manifest} <- Manifest.load(project),
          {:ok, manifest_hash} <- Manifest.content_hash(project),
+         {:ok, base_graph} <- Source.rebuild(project, manifest),
          {:ok, path} <- Project.module_path(module, options.test),
          :ok <- reject_path_collision(project, path),
-         :ok <- reject_module_collision(project, manifest, module),
+         :ok <- reject_module_collision(project, base_graph, module),
+         :ok <- validate_targets(base_graph, options),
          {:ok, source} <- module_source(module, options.source, options.test, path),
          {:ok, parsed} <- Source.parse(path, source),
          :ok <- Support.reject_unsupported(parsed.unsupported),
@@ -29,11 +31,18 @@ defmodule TwoRavens.CreateModule do
          project: project,
          files: %{path => source},
          before_files: %{},
-         base_hashes: %{path => nil},
+         base_hashes: Map.put(base_graph.revision.file_hashes, path, nil),
+         base_working_hash: base_graph.revision.working_hash,
          manifest: candidate_manifest,
          manifest_hash: manifest_hash,
          graph: proposed_graph,
-         details: %{module: module, path: path, test: options.test}
+         details: %{module: module, path: path, test: options.test},
+         semantic: %{
+           subject: Identity.module(module),
+           intent: options.intent,
+           intent_kind: :purpose,
+           targets: options.for
+         }
        }}
     end
   end
@@ -60,15 +69,22 @@ defmodule TwoRavens.CreateModule do
     end
   end
 
-  defp reject_module_collision(project, manifest, module) do
-    case Source.rebuild(project, manifest) do
-      {:ok, graph} ->
-        if Map.has_key?(graph.nodes, Identity.module(module)),
-          do: {:error, %{code: :module_collision, module: module}},
-          else: reject_unmanaged_module_collision(project, module)
+  defp reject_module_collision(project, graph, module) do
+    if Map.has_key?(graph.nodes, Identity.module(module)),
+      do: {:error, %{code: :module_collision, module: module}},
+      else: reject_unmanaged_module_collision(project, module)
+  end
 
-      {:error, reason} ->
-        {:error, reason}
+  defp validate_targets(_graph, %{test: false, for: []}), do: :ok
+
+  defp validate_targets(_graph, %{test: false}) do
+    {:error, %{code: :intended_targets_require_test_module}}
+  end
+
+  defp validate_targets(graph, %{for: targets}) do
+    case Enum.reject(targets, &Map.has_key?(graph.nodes, &1)) do
+      [] -> :ok
+      unknown -> {:error, %{code: :unknown_semantic_targets, targets: Enum.sort(unknown)}}
     end
   end
 

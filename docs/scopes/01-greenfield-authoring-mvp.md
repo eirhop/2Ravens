@@ -2,7 +2,13 @@
 
 ## Status
 
-Ready for implementation.
+Implemented in commit `b85d23d`.
+
+The mechanics benchmark is technically correct but unfavorable: the 2Ravens
+condition used more author-facing bytes, qualification work, and wall time than
+ordinary files. Model token counts remain unavailable. This scope is preserved
+as historical evidence and as the safety/source-round-trip foundation for
+[Scope 02](02-semantic-memory-mvp.md).
 
 This is the first substantial development scope for 2Ravens. It proves that an
 AI can create and then safely change a small ordinary Elixir system through

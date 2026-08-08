@@ -2,12 +2,13 @@
 
 ## Status
 
-Planned. This begins after the greenfield semantic-authoring MVP gate.
+Planned. This begins after the persistent semantic-memory MVP gate.
 
-The MVP proves safe creation, narrow read-back indexing, graph identities,
-qualification, and one semantic edit for 2Ravens-managed files. Phase 1 expands
-that boundary to arbitrary existing repositories; it does not need to reinvent
-the authoring loop.
+Scope 01 proves safe creation, narrow read-back indexing, graph identities,
+qualification, and one semantic edit for 2Ravens-managed files. Scope 02 tests
+persistent intent, evidence, compact context, and cumulative context value.
+Phase 1 expands the validated boundary to arbitrary existing repositories; it
+does not need to reinvent the authoring or semantic-memory loop.
 
 ## Product promise
 
@@ -70,7 +71,7 @@ dynamic or ambiguous path may require one additional expansion.
 
 ## Entry criteria
 
-Begin general brownfield implementation only after the managed-authoring MVP
+Begin general brownfield implementation only after the semantic-memory MVP
 proves:
 
 - Generated source reconstructs to the accepted graph in a new CLI process.
@@ -78,6 +79,9 @@ proves:
 - Derived calls and tests remain deterministic after formatting and compilation.
 - Unsafe or unsupported writes fail without modifying source.
 - The graph/source round-trip and qualification boundaries are reusable.
+- Persisted memory preserves useful facts unavailable to indexing.
+- The lifecycle benchmark reaches cumulative context break-even without
+  reducing correctness.
 
 ## First complete vertical slice
 

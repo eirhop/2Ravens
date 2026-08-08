@@ -6,12 +6,11 @@ defmodule TwoRavens.CreateFunction do
   alias TwoRavens.Identity
   alias TwoRavens.Manifest
   alias TwoRavens.Project
-  alias TwoRavens.Repository
   alias TwoRavens.Source
   alias TwoRavens.Source.Function
 
-  @spec build(Path.t(), String.t(), String.t()) :: {:ok, Proposal.t()} | {:error, map()}
-  def build(root, module, fragment) do
+  @spec build(Path.t(), String.t(), String.t(), map()) :: {:ok, Proposal.t()} | {:error, map()}
+  def build(root, module, fragment, options) do
     with {:ok, project} <- Project.open(root),
          {:ok, manifest} <- Manifest.load(project),
          {:ok, manifest_hash} <- Manifest.content_hash(project),
@@ -32,11 +31,18 @@ defmodule TwoRavens.CreateFunction do
          project: project,
          files: %{path => source},
          before_files: %{path => before},
-         base_hashes: %{path => Repository.hash(before)},
+         base_hashes: graph.revision.file_hashes,
+         base_working_hash: graph.revision.working_hash,
          manifest: manifest,
          manifest_hash: manifest_hash,
          graph: proposed_graph,
-         details: %{function: function_id, path: path}
+         details: %{function: function_id, path: path},
+         semantic: %{
+           subject: function_id,
+           intent: options.intent,
+           intent_kind: :purpose,
+           targets: []
+         }
        }}
     end
   end

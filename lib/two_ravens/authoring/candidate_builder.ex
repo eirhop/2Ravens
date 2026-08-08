@@ -20,6 +20,7 @@ defmodule TwoRavens.Authoring.CandidateBuilder do
       root: proposal.project.root,
       files: proposal.files,
       base_hashes: proposal.base_hashes,
+      base_working_hash: proposal.base_working_hash,
       manifest: proposal.manifest,
       manifest_hash: proposal.manifest_hash,
       diff: diffs,
@@ -29,7 +30,8 @@ defmodule TwoRavens.Authoring.CandidateBuilder do
         proposal
         |> details()
         |> Map.put(:changed_lines, changed_line_count(proposal.before_files, proposal.files)),
-      applied: false
+      applied: false,
+      semantic: proposal.semantic
     }
   end
 

@@ -7,17 +7,28 @@ defmodule Mix.Tasks.Ravens do
   Thin CLI adapter for `TwoRavens.Authoring` and `TwoRavens.Context`.
 
       mix ravens init --root PATH
-      mix ravens create module MODULE --root PATH [--test] [--stdin] [--apply]
-      mix ravens create function MODULE --root PATH --stdin [--apply]
-      mix ravens context function:MODULE.name/arity --root PATH --for-edit
-      mix ravens set HANDLE.operator OPERATOR --root PATH [--apply]
+      mix ravens create module MODULE --root PATH [--test] [--intent TEXT] [--for TARGET]
+      mix ravens create function MODULE --root PATH --stdin [--intent TEXT] [--apply]
+      mix ravens context function:MODULE.name/arity --root PATH [--include FIELDS]
+      mix ravens set HANDLE.operator OPERATOR --root PATH [--intent TEXT] [--apply]
   """
 
   alias TwoRavens.Authoring
   alias TwoRavens.CLI
   alias TwoRavens.Context
 
-  @switches [root: :string, apply: :boolean, test: :boolean, stdin: :boolean, for_edit: :boolean]
+  @switches [
+    root: :string,
+    apply: :boolean,
+    test: :boolean,
+    stdin: :boolean,
+    for_edit: :boolean,
+    intent: :string,
+    for: :keep,
+    include: :string,
+    compact: :boolean,
+    details: :boolean
+  ]
 
   @impl Mix.Task
   def run(arguments) do
@@ -44,18 +55,21 @@ defmodule Mix.Tasks.Ravens do
     Authoring.create_module(root, module,
       source: source,
       test: Keyword.get(options, :test, false),
+      intent: Keyword.get(options, :intent),
+      for: Keyword.get_values(options, :for),
       apply: Keyword.get(options, :apply, false)
     )
-    |> formatted(&CLI.candidate/1)
+    |> formatted(&CLI.candidate(&1, details: Keyword.get(options, :details, false)))
   end
 
   defp dispatch(["create", "function", module], root, options) do
     if Keyword.get(options, :stdin, false) do
       with {:ok, source} <- read_stdin() do
         Authoring.create_function(root, module, source,
+          intent: Keyword.get(options, :intent),
           apply: Keyword.get(options, :apply, false)
         )
-        |> formatted(&CLI.candidate/1)
+        |> formatted(&CLI.candidate(&1, details: Keyword.get(options, :details, false)))
       end
     else
       {:error, %{code: :stdin_required}}
@@ -63,13 +77,27 @@ defmodule Mix.Tasks.Ravens do
   end
 
   defp dispatch(["context", focus], root, options) do
-    Context.query(root, focus, for_edit: Keyword.get(options, :for_edit, false))
-    |> formatted(&CLI.context/1)
+    includes =
+      case Keyword.get(options, :include) do
+        nil -> []
+        include -> [include]
+      end
+
+    Context.query(root, focus,
+      for_edit: Keyword.get(options, :for_edit, false),
+      include: includes,
+      compact: Keyword.get(options, :compact, true),
+      details: Keyword.get(options, :details, false)
+    )
+    |> formatted(&CLI.context(&1, details: Keyword.get(options, :details, false)))
   end
 
   defp dispatch(["set", target, operator], root, options) do
-    Authoring.set(root, target, operator, apply: Keyword.get(options, :apply, false))
-    |> formatted(&CLI.candidate/1)
+    Authoring.set(root, target, operator,
+      intent: Keyword.get(options, :intent),
+      apply: Keyword.get(options, :apply, false)
+    )
+    |> formatted(&CLI.candidate(&1, details: Keyword.get(options, :details, false)))
   end
 
   defp dispatch(_command, _root, _options), do: {:error, %{code: :unsupported_command}}

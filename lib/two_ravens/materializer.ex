@@ -8,6 +8,7 @@ defmodule TwoRavens.Materializer do
   alias TwoRavens.Project
   alias TwoRavens.Qualification.Evidence
   alias TwoRavens.Repository
+  alias TwoRavens.SemanticStore
   alias TwoRavens.Source
 
   @doc "Applies a fully qualified candidate and restores original bytes on any returned failure."
@@ -24,10 +25,18 @@ defmodule TwoRavens.Materializer do
   def apply(%Candidate{}), do: {:error, %{code: :candidate_not_qualified}}
 
   defp apply_with_rollback(project, candidate, snapshot) do
-    case commit(project, candidate) do
-      {:ok, accepted_graph} ->
+    case SemanticStore.accept(project, candidate, fn -> commit_source(project, candidate) end) do
+      {:ok, {accepted_graph, receipt}} ->
         evidence = %{candidate.evidence | accepted_graph: :pass}
-        {:ok, %{candidate | graph: accepted_graph, evidence: evidence, applied: true}}
+
+        {:ok,
+         %{
+           candidate
+           | graph: accepted_graph,
+             evidence: evidence,
+             applied: true,
+             semantic: Map.put(candidate.semantic, :receipt, receipt)
+         }}
 
       {:error, reason} ->
         case restore(project, snapshot) do
@@ -40,7 +49,7 @@ defmodule TwoRavens.Materializer do
     end
   end
 
-  defp commit(project, candidate) do
+  defp commit_source(project, candidate) do
     with :ok <- write_files(project, candidate.files),
          :ok <- Manifest.write(project, candidate.manifest),
          {:ok, accepted_graph} <- Source.rebuild(project, candidate.manifest),

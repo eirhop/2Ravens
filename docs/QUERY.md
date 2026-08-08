@@ -20,8 +20,9 @@ context(
 The agent interprets the user's task. The query contains explicit graph needs,
 not open-ended task prose.
 
-During the greenfield MVP, the graph is rebuilt from only 2Ravens-managed files
-and the implemented query is a narrow function-focus subset of this contract.
+Scope 01 rebuilds the graph from only 2Ravens-managed files. Scope 02 persists
+current graph facts plus requested intent and evidence in local semantic memory.
+The implemented query remains a narrow function-focus subset of this contract.
 Phase 1 extends the same contract to arbitrary existing repositories.
 
 ## Interfaces
@@ -147,6 +148,8 @@ prefer paths such as:
 - Tests
 - OTP messages and handlers
 - Evidence, confidence, and uncertainty
+- Requested intent and intended relationships
+- Fact origin: requested, derived, observed, or reconstructed
 
 The graph always retains these facts when indexed. `include` controls response
 cost, not truth or traversal semantics.
@@ -279,6 +282,21 @@ or MCP tool.
 The MVP preset also reports when its graph is limited to managed files and
 lists unsupported or unexpanded source facts. It must not imply that the
 complete Phase 1 query contract has been implemented.
+
+Scope 02 adds compact semantic-memory fields:
+
+```text
+focus entity:n8 function:RavensShop.Pricing.total/2
+intent requested "Calculate final price after the tier discount"
+caller source_derived function:RavensShop.Checkout.checkout/2
+test requested RavensShop.PricingTest intended_to_test
+test observed unknown reason=coverage_not_captured
+freshness current revision:r3
+```
+
+Intent is returned only when requested by `include`. Missing persisted intent
+is `unavailable`; it is never inferred from names or documentation. Default
+responses omit full source and diff unless they are explicitly included.
 
 ## Progressive usage scenarios
 

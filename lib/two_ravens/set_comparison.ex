@@ -16,8 +16,8 @@ defmodule TwoRavens.SetComparison do
 
   @operators ["==", "!=", "===", "!==", "<", "<=", ">", ">="]
 
-  @spec build(Path.t(), String.t(), String.t()) :: {:ok, Proposal.t()} | {:error, map()}
-  def build(root, target, operator) do
+  @spec build(Path.t(), String.t(), String.t(), map()) :: {:ok, Proposal.t()} | {:error, map()}
+  def build(root, target, operator, options) do
     with :ok <- validate_operator(operator),
          {:ok, handle} <- decode_target(target),
          {:ok, project} <- Project.open(root),
@@ -38,11 +38,18 @@ defmodule TwoRavens.SetComparison do
          project: project,
          files: %{handle.path => source},
          before_files: %{handle.path => before},
-         base_hashes: %{handle.path => handle.file_hash},
+         base_hashes: graph.revision.file_hashes,
+         base_working_hash: graph.revision.working_hash,
          manifest: manifest,
          manifest_hash: manifest_hash,
          graph: proposed_graph,
-         details: details(project, graph, comparison, operator, before, source)
+         details: details(project, graph, comparison, operator, before, source),
+         semantic: %{
+           subject: comparison.function_id,
+           intent: options.intent,
+           intent_kind: :change_reason,
+           targets: []
+         }
        }}
     end
   end

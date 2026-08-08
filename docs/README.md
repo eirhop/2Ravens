@@ -10,6 +10,8 @@ Start with these documents:
   flexible operation.
 - [Semantic editing](EDITING.md) defines compact candidate changes, their
   validation boundary, and the managed-authoring MVP contract.
+- [Authoring-time semantic memory](SEMANTIC_MEMORY.md) defines the revised
+  hypothesis, fact classes, lifecycle benchmark, and decision gate.
 - [Roadmap](ROADMAP.md) records the order of work and the gate between phases.
 - [Architecture](ARCHITECTURE.md) defines the local graph, execution envelope,
   evidence model, and current technical direction.
@@ -22,8 +24,9 @@ Each product phase has its own plan:
 
 Implementation starts from bounded development scopes:
 
-1. [Greenfield semantic authoring MVP](scopes/01-greenfield-authoring-mvp.md)
-2. [Copy-paste implementation prompt](scopes/01-implementation-prompt.md)
+1. [Greenfield semantic authoring MVP — implemented](scopes/01-greenfield-authoring-mvp.md)
+2. [Persistent semantic memory MVP — next](scopes/02-semantic-memory-mvp.md)
+3. [Copy-paste Scope 02 implementation prompt](scopes/02-implementation-prompt.md)
 
 ## Document boundaries
 
@@ -32,6 +35,8 @@ Implementation starts from bounded development scopes:
 - `QUERY.md` owns the public context-query contract and usage scenarios.
 - `EDITING.md` owns the semantic-change contract, CLI shape, validation, and
   implementation gate.
+- `SEMANTIC_MEMORY.md` owns the authoring-time memory hypothesis, fact classes,
+  cumulative benchmark, and persistence decision gate.
 - `scopes/` owns developer-ready implementation boundaries and acceptance
   criteria without replacing the product roadmap.
 - `phases/` owns the promise, scope, validation, and exit criteria for each

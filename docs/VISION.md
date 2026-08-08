@@ -37,19 +37,26 @@ The graph is not a claim that every Elixir relationship is statically
 knowable. Dynamic calls, generated code, protocol dispatch, and process
 destinations must remain visible as possible or unresolved relationships.
 
-The first proof is deliberately smaller and write-first. 2Ravens creates and
-edits a constrained greenfield Elixir project, derives relationships from the
-source it produced, and verifies that its semantic model survives formatting,
-compilation, tests, and source read-back. General brownfield understanding
-follows only after that closed loop works.
+The first proof was deliberately smaller and write-first. 2Ravens now creates
+and edits a constrained greenfield Elixir project, derives relationships from
+the source it produced, and verifies that its semantic model survives
+formatting, compilation, tests, and source read-back.
+
+The next proof adds local authoring-time semantic memory. It tests whether
+preserving intent, stable identity, and typed evidence reduces cumulative AI
+context across later work compared with files alone and retrospective indexing.
+General brownfield understanding follows only after this value is measured.
 
 ## One foundation across three phases
 
 The product follows one coherent progression:
 
 ```text
-MVP:     Can 2Ravens create and safely change ordinary Elixir?
-         Managed semantic authoring
+MVP 1:   Can 2Ravens create and safely change ordinary Elixir?
+         Managed semantic authoring — implemented
+
+MVP 2:   Does authoring-time memory reduce cumulative context?
+         Persistent semantic memory — active
 
 Phase 1: What could happen?
          Possible execution graph
@@ -98,11 +105,15 @@ Every core capability must run on the developer's machine after installation.
 model, or external database. Network integrations may be optional adapters but
 must never be required for the complete local workflow.
 
-### Derive rather than annotate
+### Preserve intent and derive evidence
 
 2Ravens should derive relationships from source, compiler evidence, tests,
 Git, and runtime observations. Codebases should not need 2Ravens-specific
 annotations or duplicated declarations that can become stale.
+
+When an author already knows why a function or test exists, 2Ravens may retain
+that concise intent as requested knowledge. It must remain distinguishable from
+derived relationships and observed evidence.
 
 Ordinary `@moduledoc`, `@doc`, typespecs, behaviours, tests, and architecture
 documents enrich graph nodes because they are already useful parts of an
@@ -117,8 +128,8 @@ facts; it does not reinterpret free-text tasks with another model.
 ### Authority remains outside 2Ravens
 
 Source and Git define the implementation and revision. Tests and runtime events
-provide behavioral evidence. The graph is a derived, disposable projection
-that can be rebuilt.
+provide behavioral evidence. A local embedded store may retain operational
+semantic memory, but it is not the only recoverable copy of the program.
 
 ### Evidence and uncertainty are visible
 
@@ -171,7 +182,9 @@ spending many steps reconstructing callers, dependencies, tests, and effects.
 
 When that slice identifies a safe edit target, the AI should be able to propose
 the smallest clear change and receive its source and behavior impact without
-manually describing the graph relationships that 2Ravens can derive.
+manually describing graph relationships that 2Ravens can derive. Intent captured
+during earlier work should be reusable without repeatedly rereading or
+reconstructing it.
 
 A reviewer should be able to see how the possible behavior changed before
 reading the complete diff.

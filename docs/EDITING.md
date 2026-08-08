@@ -2,12 +2,14 @@
 
 ## Status
 
-MVP contract. Ready for implementation.
+Scope 01 implemented. Scope 02 semantic-memory experiment ready for
+implementation.
 
 Semantic editing is the first greenfield MVP foundation. It creates a narrow
-repository graph while authoring ordinary Elixir, but it does not replace the
-three later product phases, make the graph authoritative, or commit 2Ravens to
-a persistent database.
+repository graph while authoring ordinary Elixir. Scope 02 persists stable
+identity, intent, derived facts, and evidence locally to test their cumulative
+context value. It does not replace the three later product phases or make the
+database the canonical source-code store.
 
 ## Purpose
 
@@ -17,11 +19,19 @@ create modules and functions as normal Elixir. Once 2Ravens has read that
 source back and identified a precise program element, the agent can reuse its
 identity for a smaller candidate change.
 
-The product hypothesis is:
+The original mechanics hypothesis was:
 
 > Revision-bound semantic targets plus ordinary Elixir can reduce total agent
 > tokens and incorrect-target edits while producing the same inspectable source
 > diff.
+
+Scope 01 proved correctness but did not demonstrate efficiency, and host model
+tokens were unavailable. The active hypothesis is now:
+
+> Authoring-time semantic memory can preserve knowledge that indexing cannot
+> recover and amortize its initial token overhead across later tasks.
+
+See [Authoring-time semantic memory](SEMANTIC_MEMORY.md).
 
 The goal is not to make every edit semantic. The smallest representation that
 remains clear should be selected for each change:
@@ -41,7 +51,8 @@ Source and Git remain authoritative during this experiment:
 Source code = implementation authority
 Git when present = named revision authority
 Managed file hashes = current working revision
-Repository graph = regenerable projection
+Embedded store = operational semantic memory at one recorded revision
+Repository graph = source-derived and memory-enriched projection
 Candidate = unapplied proposal derived from one base revision
 ```
 
@@ -67,6 +78,7 @@ Small change:   context -> edit handle -> set ──┤
 immutable candidate -> source materialization -> graph round-trip
 -> compile and focused verification -> source and behavior diff
 -> explicit apply -> working-tree source -> read-back graph
+-> accepted semantic-memory transaction
 ```
 
 The agent does not submit callers, tests, effects, or other derivable
@@ -333,41 +345,39 @@ Example model arguments for the small edit:
 The MCP adapter is justified only if it improves compatibility or total task
 cost over invoking the CLI through an existing shell tool.
 
-## Token-efficiency evaluation
+## Cumulative context evaluation
 
-The relevant measurement is total cost for a correct completed change, not the
-size of one command.
+The relevant measurement is cumulative context for correct completed work, not
+the size or speed of one creation command.
 
-Compare the same frozen editing tasks under two conditions:
+Compare the same frozen lifecycle tasks under three conditions:
 
 ```text
-Without Ravens
-repository exploration + source reads + patch + corrections + verification
-
-With Ravens
-context query + semantic or Elixir input + corrections + verification
+Files only
+Source-indexed graph
+Authoring-time semantic memory
 ```
 
 Record:
 
 - Model input and output tokens when the host exposes them
-- Context bytes as a tokenizer-independent fallback
+- Tool-request, tool-result, and cumulative context bytes as fallbacks
 - Tool calls and repository-exploration operations
-- Time to the first correct candidate
+- Persistent facts reused
 - Incorrect-target and stale-target attempts
 - Candidate correction rounds
 - Generated source-diff size
 - Compile and test outcome
 - Human time and accuracy when explaining the behavior impact
+- Wall time as a diagnostic only
 
-Do not assume semantic editing is cheaper. A tiny direct file patch may beat a
-context query plus semantic command when the target is already obvious. The
-capability succeeds only when the complete workflow is materially better on
-representative changes.
+Do not assume semantic memory is cheaper. It succeeds only when it preserves
+useful knowledge unavailable to indexing, reaches cumulative context break-even
+within the frozen task sequence, and preserves or improves correctness.
 
 ## First implementation slice
 
-The first slice is the greenfield workflow defined in
+The implemented first slice is the greenfield workflow defined in
 [Development scope 01](scopes/01-greenfield-authoring-mvp.md). It starts with a
 normal new Mix project and manages only files that 2Ravens creates.
 
@@ -443,9 +453,9 @@ the same model, reasoning effort, permissions, and completion rule. Decide
 whether to broaden the managed Elixir subset before adding brownfield import,
 MCP writes, persistence, batch scripts, or more edit operations.
 
-## Exit gate
+## Scope 01 result and next gate
 
-The semantic-authoring MVP is technically complete only when:
+The semantic-authoring MVP met its technical gate:
 
 - No accepted candidate silently changes unrelated source or graph facts.
 - Stale and ambiguous targets fail safely.
@@ -457,7 +467,8 @@ The semantic-authoring MVP is technically complete only when:
 - The comparative workflow records tokens or bytes, operations, corrections,
   correctness, and review evidence without inventing a favorable result.
 
-More write operations should be added only when at least one representative
-workflow materially improves total context, operations, correctness, or review
-understanding. If the technical conditions fail, 2Ravens should not broaden its
-write surface; the graph may still provide value for context and review.
+Its mechanics benchmark did not show efficiency, so more edit verbs remain
+deferred. The next implementation and product gate is
+[Scope 02](scopes/02-semantic-memory-mvp.md): persistent semantic memory must
+preserve unique useful facts and reduce cumulative context without lowering
+correctness.

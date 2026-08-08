@@ -6,26 +6,30 @@ defmodule TwoRavens.Authoring.Candidate do
     :root,
     :files,
     :base_hashes,
+    :base_working_hash,
     :manifest,
     :manifest_hash,
     :diff,
     :graph,
     :evidence,
     :details,
-    :applied
+    :applied,
+    :semantic
   ]
   defstruct [
     :kind,
     :root,
     :files,
     :base_hashes,
+    :base_working_hash,
     :manifest,
     :manifest_hash,
     :diff,
     :graph,
     :evidence,
     :details,
-    :applied
+    :applied,
+    :semantic
   ]
 
   @type t :: %__MODULE__{
@@ -33,12 +37,14 @@ defmodule TwoRavens.Authoring.Candidate do
           root: String.t(),
           files: %{String.t() => String.t()},
           base_hashes: %{String.t() => String.t() | nil},
+          base_working_hash: String.t(),
           manifest: TwoRavens.Manifest.t(),
           manifest_hash: String.t(),
           diff: String.t(),
           graph: TwoRavens.Graph.t(),
           evidence: TwoRavens.Qualification.Evidence.t(),
           details: map(),
-          applied: boolean()
+          applied: boolean(),
+          semantic: map()
         }
 end
