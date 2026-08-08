@@ -7,6 +7,7 @@ defmodule TwoRavens.SemanticStore.Projection do
   alias TwoRavens.Source.Comparison
   alias TwoRavens.Source.Function
   alias TwoRavens.Source.Module
+  alias TwoRavens.Source.ModuleForm
   alias TwoRavens.Source.Test
 
   @type projection_node :: %{
@@ -53,12 +54,13 @@ defmodule TwoRavens.SemanticStore.Projection do
   end
 
   defp kind(%Module{}), do: "module"
+  defp kind(%ModuleForm{}), do: "module_form"
   defp kind(%Function{}), do: "function"
   defp kind(%Clause{}), do: "clause"
   defp kind(%Comparison{}), do: "comparison"
   defp kind(%Test{}), do: "test"
 
-  defp fingerprint(%Module{id: id}, graph) do
+  defp fingerprint(%Module{id: id, documentation: documentation}, graph) do
     children =
       graph.edges
       |> Enum.filter(&(&1.kind == :defines and &1.from == id))
@@ -68,7 +70,7 @@ defmodule TwoRavens.SemanticStore.Projection do
       end)
       |> Enum.sort()
 
-    Identity.fingerprint({:module, children})
+    Identity.fingerprint({:module, documentation, children})
   end
 
   defp fingerprint(%Function{} = function, _graph) do
@@ -79,10 +81,13 @@ defmodule TwoRavens.SemanticStore.Projection do
          Enum.map(clause.calls, &{&1.name, &1.arity})}
       end)
 
-    Identity.fingerprint({:function, function.arity, clauses})
+    Identity.fingerprint(
+      {:function, function.arity, function.documentation, function.specifications, clauses}
+    )
   end
 
   defp fingerprint(%Clause{fingerprint: fingerprint}, _graph), do: fingerprint
+  defp fingerprint(%ModuleForm{fingerprint: fingerprint}, _graph), do: fingerprint
   defp fingerprint(%Comparison{fingerprint: fingerprint}, _graph), do: fingerprint
 
   defp fingerprint(%Test{} = test, _graph) do

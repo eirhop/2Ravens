@@ -11,8 +11,8 @@ defmodule TwoRavens.AuthoringSafetyTest do
   alias TwoRavens.SourceRange
 
   setup do
-    root =
-      Path.join(System.tmp_dir!(), "two-ravens-safety-#{System.unique_integer([:positive])}")
+    suffix = Base.url_encode64(:crypto.strong_rand_bytes(9), padding: false)
+    root = Path.join(System.tmp_dir!(), "two-ravens-safety-#{suffix}")
 
     File.mkdir_p!(Path.join(root, "lib"))
     File.write!(Path.join(root, "mix.exs"), "defmodule Temporary.MixProject do\nend\n")

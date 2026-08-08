@@ -2,12 +2,13 @@
 
 ## Planning rule
 
-2Ravens begins with two bounded MVP experiments, followed by three product
+2Ravens begins with bounded MVP experiments, followed by three product
 phases built on the same semantic evidence graph:
 
 ```text
 MVP 1: greenfield semantic authoring — implemented
-MVP 2: persistent semantic memory — active
+MVP 2: persistent semantic memory — implemented; gate failed
+MVP 3: entity-based batch authoring — first vertical slice implemented
 Phase 1: possible execution
 Phase 2: changed possibilities
 Phase 3: observed execution
@@ -18,13 +19,16 @@ before product development moves to the next.
 
 ## Current status
 
-**Persistent semantic-memory MVP ready for implementation**
+**Entity-based batch authoring MVP under qualification**
 
-Scope 01 proved safe source materialization, qualification, semantic editing,
-and deterministic graph reconstruction. Its mechanics benchmark was
-unfavorable and model token counts were unavailable. The immediate work is to
-test whether persisted authoring intent and evidence reduce cumulative model
-context over repeated later tasks.
+Scope 01 proved safe source materialization. Scope 02 implemented local
+semantic memory, but its frozen lifecycle remained larger than source-indexed
+context. A live agent probe then showed that semantic creation works while
+function-at-a-time commands create excessive round trips. A first batch API now
+submits ordered entity operations once, retains compiler-invalid drafts for
+repair, and qualifies one atomic candidate. The next work is to close the
+remaining [Scope 03 gaps](scopes/03-entity-authoring-mvp.md#status) and run the
+reproducible comparative agent probe.
 
 ## MVP foundation 1 — managed semantic authoring
 
@@ -94,8 +98,36 @@ Gate:
 - Correctness is preserved or improved.
 - Freshness, provenance, uncertainty, and missing intent remain explicit.
 
-Do not add Ecto, a graph database, portable synchronization, MCP writes, UI,
-brownfield import, or more edit verbs before this gate passes.
+The cumulative-context gate failed against source indexing. Do not expand the
+store into Ecto, a graph database, portable synchronization, UI, or brownfield
+infrastructure from that result. Scope 03 below is a separate bounded response
+to measured authoring round trips, not an expansion justified by Scope 02.
+
+## MVP foundation 3 — entity-based batch authoring
+
+[API contract](ENTITY_AUTHORING.md) ·
+[Developer scope](scopes/03-entity-authoring-mvp.md)
+
+Goal:
+
+> Let an agent create new Elixir freely, then edit existing modules only through
+> exact module, function, clause, and module-form entities in one repairable
+> atomic request.
+
+Milestones:
+
+1. Accept one ordered JSON-shaped operation list.
+2. Split a free-form bundle only when every submitted module is new.
+3. Add and edit existing functions and ordered clauses as module children.
+4. Cache invalid large requests and repair one entity by draft ID.
+5. Project conventional source, qualify once, and commit source/store together.
+6. Re-run the live-agent probe with fewer calls and equal correctness.
+
+The API deliberately excludes whole-existing-module merge, custom macros,
+caller-supplied relations, and speculative metadata.
+
+Status: first vertical slice implemented; completion gate and comparative probe
+remain open.
 
 ## Preparation — contract and benchmark
 
@@ -216,12 +248,8 @@ validation while preserving local operation:
 
 ## Immediate next milestone
 
-[Developer scope: persistent semantic memory MVP](scopes/02-semantic-memory-mvp.md)
+[Developer scope: entity-based batch authoring MVP](scopes/03-entity-authoring-mvp.md)
 
-Implement SQLite migrations and round-trip one stable entity plus requested
-intent first. Then persist accepted derived facts and evidence, serve compact
-fresh-process context, reconcile stale or missing stores, and run the frozen
-three-condition lifecycle benchmark.
-
-Use the [copy-paste implementation prompt](scopes/02-implementation-prompt.md)
-to hand the bounded scope to a developer.
+Implement strict request validation and split two new modules from one source
+bundle first. Then add exact function/clause edits, versioned draft repair,
+single qualification, atomic projection, and the live-agent probe.

@@ -2,7 +2,14 @@
 
 ## Status
 
-Ready for implementation.
+Implemented in commit `83630db`.
+
+The local persistence, freshness, recovery, provenance, and compact-context
+technical gate passed. The frozen lifecycle product gate failed against the
+source-indexed condition: semantic memory preserved more useful facts and
+improved correctness, but did not reduce cumulative context enough. The result
+remains evidence and infrastructure for
+[Scope 03](03-entity-authoring-mvp.md), not proof of an efficiency win.
 
 Scope 01 is implemented and remains the source-round-trip and managed-write
 safety foundation. Its mechanics benchmark did not demonstrate authoring

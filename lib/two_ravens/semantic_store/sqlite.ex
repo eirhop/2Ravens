@@ -2,6 +2,7 @@ defmodule TwoRavens.SemanticStore.SQLite do
   @moduledoc "Low-level Exqlite boundary using short-lived connections and bound SQL."
 
   alias Exqlite.Sqlite3
+  alias TwoRavens.Change.Draft
   alias TwoRavens.Project
   alias TwoRavens.Repository
   alias TwoRavens.Semantic.Entity
@@ -226,6 +227,104 @@ defmodule TwoRavens.SemanticStore.SQLite do
   @doc false
   @spec schema_version(connection()) :: {:ok, non_neg_integer()} | {:error, map()}
   def schema_version(connection), do: applied_version(connection)
+
+  @doc false
+  @spec put_draft(connection(), Draft.t()) :: {:ok, Draft.t()} | {:error, map()}
+  def put_draft(connection, %Draft{} = draft) do
+    payload = draft |> Draft.dump() |> Jason.encode!()
+    hash = Repository.hash(payload)
+
+    with :ok <-
+           execute_bound(
+             connection,
+             """
+             INSERT INTO change_drafts(
+               draft_id, version, base_revision, base_working_hash, status,
+               expires_at, payload, payload_hash, created_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             """,
+             [
+               draft.id,
+               draft.version,
+               draft.base_revision,
+               draft.base_working_hash,
+               Atom.to_string(draft.status),
+               draft.expires_at,
+               {:blob, payload},
+               hash,
+               DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+             ]
+           ) do
+      {:ok, draft}
+    end
+  end
+
+  @doc false
+  @spec get_draft(connection(), String.t(), pos_integer()) ::
+          {:ok, Draft.t()} | {:error, map()}
+  def get_draft(connection, id, version) do
+    with {:ok, [[latest]]} <-
+           query(
+             connection,
+             "SELECT COALESCE(MAX(version), 0) FROM change_drafts WHERE draft_id = ?",
+             [id]
+           ),
+         :ok <- verify_draft_version(latest, id, version),
+         {:ok, rows} <-
+           query(
+             connection,
+             """
+             SELECT payload, payload_hash, expires_at
+             FROM change_drafts WHERE draft_id = ? AND version = ?
+             """,
+             [id, version]
+           ) do
+      load_draft_row(rows, id, version)
+    end
+  end
+
+  defp verify_draft_version(0, id, version),
+    do: {:error, %{code: :draft_not_found, draft: id, version: version}}
+
+  defp verify_draft_version(version, _id, version), do: :ok
+
+  defp verify_draft_version(latest, id, version),
+    do: {:error, %{code: :stale_draft_version, draft: id, version: version, latest: latest}}
+
+  @doc false
+  @spec delete_draft(connection(), String.t()) :: :ok | {:error, map()}
+  def delete_draft(connection, id) do
+    execute_bound(connection, "DELETE FROM change_drafts WHERE draft_id = ?", [id])
+  end
+
+  defp load_draft_row([], id, version),
+    do: {:error, %{code: :draft_not_found, draft: id, version: version}}
+
+  defp load_draft_row([[payload, hash, expires_at]], id, version) do
+    cond do
+      byte_size(payload) > 5_000_000 ->
+        {:error, %{code: :draft_corrupt, draft: id, version: version}}
+
+      DateTime.compare(DateTime.from_iso8601(expires_at) |> elem(1), DateTime.utc_now()) == :lt ->
+        {:error, %{code: :draft_expired, draft: id, version: version}}
+
+      Repository.hash(payload) != hash ->
+        {:error, %{code: :draft_corrupt, draft: id, version: version}}
+
+      true ->
+        with {:ok, decoded} <- Jason.decode(payload),
+             {:ok, %Draft{id: ^id, version: ^version} = draft} <- Draft.load(decoded) do
+          {:ok, draft}
+        else
+          _other -> {:error, %{code: :draft_corrupt, draft: id, version: version}}
+        end
+    end
+  rescue
+    _error -> {:error, %{code: :draft_corrupt, draft: id, version: version}}
+  end
+
+  defp load_draft_row(_rows, id, version),
+    do: {:error, %{code: :draft_corrupt, draft: id, version: version}}
 
   defp ensure_parent(path) do
     case File.mkdir_p(Path.dirname(path)) do

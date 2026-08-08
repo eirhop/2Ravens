@@ -9,6 +9,7 @@ defmodule TwoRavens.Source.Parser do
   alias TwoRavens.Source.Fragment
   alias TwoRavens.Source.Function
   alias TwoRavens.Source.Module
+  alias TwoRavens.Source.ModuleForm
   alias TwoRavens.Source.Range
   alias TwoRavens.Source.Subset
   alias TwoRavens.Source.Syntax
@@ -34,6 +35,7 @@ defmodule TwoRavens.Source.Parser do
       source_module = %Module{
         id: Identity.module(module_name),
         name: module_name,
+        documentation: module_documentation(entries),
         source: Range.put_start(module_range, module_meta),
         evidence: evidence
       }
@@ -46,6 +48,7 @@ defmodule TwoRavens.Source.Parser do
          path: path,
          hash: Repository.hash(source),
          module: source_module,
+         module_forms: derive_module_forms(entries, module_name, path, lines, evidence),
          functions: functions,
          tests: tests,
          unsupported: unsupported
@@ -81,7 +84,7 @@ defmodule TwoRavens.Source.Parser do
     |> Enum.reduce({[], []}, fn entry, {accepted, unsupported} ->
       case Subset.top_level(entry) do
         :supported -> {[entry | accepted], unsupported}
-        {:unsupported, description} -> {accepted, [description | unsupported]}
+        {:unsupported, description} -> {[entry | accepted], [description | unsupported]}
       end
     end)
     |> then(fn {accepted, unsupported} ->
@@ -97,7 +100,7 @@ defmodule TwoRavens.Source.Parser do
 
     positioned =
       entries
-      |> Enum.filter(&match?({kind, _, _} when kind in [:def, :test], &1))
+      |> Enum.filter(&match?({kind, _, _} when kind in [:def, :defp, :test], &1))
       |> Enum.map(&{Range.line_of(&1), &1})
       |> Enum.sort_by(&elem(&1, 0))
 
@@ -122,12 +125,12 @@ defmodule TwoRavens.Source.Parser do
 
     clauses =
       ranges
-      |> Enum.filter(fn {ast, _range} -> match?({:def, _, _}, ast) end)
+      |> Enum.filter(fn {ast, _range} -> match?({kind, _, _} when kind in [:def, :defp], ast) end)
       |> Enum.map(fn {ast, source_range} ->
         clause_seed(ast, module_name, aliases, imports, path, source, source_range, evidence)
       end)
 
-    functions = build_functions(clauses, evidence)
+    functions = clauses |> build_functions(evidence) |> attach_function_attributes(entries)
 
     tests =
       ranges
@@ -139,8 +142,45 @@ defmodule TwoRavens.Source.Parser do
     {functions, tests}
   end
 
+  defp derive_module_forms(entries, module_name, path, lines, evidence) do
+    module_end_line = Range.final_module_end_line(lines)
+
+    entries
+    |> Enum.reject(&owned_elsewhere?/1)
+    |> Enum.map(fn entry ->
+      line = Range.line_of(entry)
+
+      next_line =
+        entries
+        |> Enum.map(&Range.line_of/1)
+        |> Enum.filter(&(&1 > line))
+        |> Enum.min(fn -> module_end_line end)
+
+      {end_line, end_column} = Range.ast_end(entry, lines, max(line, next_line - 1))
+      form = Macro.to_string(entry)
+      fingerprint = Identity.fingerprint({:module_form, form})
+
+      %ModuleForm{
+        id: "module_form:#{module_name}:#{fingerprint}",
+        module: module_name,
+        form: form,
+        fingerprint: fingerprint,
+        source: Range.new(path, line, Range.column_of(entry), end_line, end_column),
+        evidence: evidence
+      }
+    end)
+  end
+
+  defp owned_elsewhere?({kind, _meta, _args}) when kind in [:def, :defp, :test], do: true
+
+  defp owned_elsewhere?({:@, _meta, [{name, _inner, _value}]})
+       when name in [:moduledoc, :doc, :spec, :impl, :deprecated],
+       do: true
+
+  defp owned_elsewhere?(_entry), do: false
+
   defp clause_seed(
-         {:def, _meta, [head, body_keyword]},
+         {definition_kind, _meta, [head, body_keyword]},
          module_name,
          aliases,
          imports,
@@ -151,13 +191,17 @@ defmodule TwoRavens.Source.Parser do
        ) do
     {name, args, guard} = Syntax.function_head(head)
     function_id = Identity.function(module_name, Atom.to_string(name), length(args))
+    body = Keyword.fetch!(body_keyword, :do)
 
     clause_fingerprint =
-      Identity.fingerprint({Enum.map(args, &Macro.to_string/1), Syntax.normalize_ast(guard)})
+      Identity.fingerprint(
+        {Enum.map(args, &Macro.to_string/1), Syntax.normalize_ast(guard),
+         Syntax.normalize_ast(body)}
+      )
 
     calls =
       Facts.calls(
-        Keyword.fetch!(body_keyword, :do),
+        body,
         module_name,
         aliases,
         imports,
@@ -181,6 +225,8 @@ defmodule TwoRavens.Source.Parser do
       module: module_name,
       name: Atom.to_string(name),
       arity: length(args),
+      definition_kind: :def,
+      visibility: if(definition_kind == :defp, do: :private, else: :public),
       patterns: Enum.map(args, &Macro.to_string/1),
       guard: guard && Macro.to_string(guard),
       fingerprint: clause_fingerprint,
@@ -210,6 +256,8 @@ defmodule TwoRavens.Source.Parser do
         module: first.module,
         name: first.name,
         arity: first.arity,
+        definition_kind: first.definition_kind,
+        visibility: first.visibility,
         clauses: clauses,
         source: source,
         evidence: evidence
@@ -219,12 +267,70 @@ defmodule TwoRavens.Source.Parser do
 
   defp build_clauses(grouped, evidence) do
     grouped
+    |> Enum.map_reduce(%{}, fn seed, occurrences ->
+      occurrence = Map.get(occurrences, seed.fingerprint, 0) + 1
+      {{seed, occurrence}, Map.put(occurrences, seed.fingerprint, occurrence)}
+    end)
+    |> elem(0)
     |> Enum.with_index(1)
-    |> Enum.map(fn {seed, ordinal} -> build_clause(seed, ordinal, evidence) end)
+    |> Enum.map(fn {{seed, occurrence}, ordinal} ->
+      build_clause(seed, ordinal, occurrence, evidence)
+    end)
   end
 
-  defp build_clause(seed, ordinal, evidence) do
-    clause_id = "clause:#{seed.function_id}:#{ordinal}:#{seed.fingerprint}"
+  defp attach_function_attributes(functions, entries) do
+    Enum.map(functions, fn function ->
+      first_clause_line = hd(function.clauses).source.start_line
+
+      attributes =
+        entries
+        |> Enum.take_while(&(Range.line_of(&1) < first_clause_line))
+        |> Enum.reverse()
+        |> Enum.take_while(&function_attribute?/1)
+
+      start_line =
+        attributes
+        |> List.last()
+        |> case do
+          nil -> first_clause_line
+          attribute -> Range.line_of(attribute)
+        end
+
+      %{
+        function
+        | documentation: attribute_value(attributes, :doc),
+          specifications: attribute_strings(attributes, :spec),
+          source: %{function.source | start_line: start_line, start_column: 1}
+      }
+    end)
+  end
+
+  defp function_attribute?({:@, _meta, [{name, _inner, _value}]})
+       when name in [:doc, :spec, :impl, :deprecated],
+       do: true
+
+  defp function_attribute?(_entry), do: false
+
+  defp module_documentation(entries), do: attribute_value(entries, :moduledoc)
+
+  defp attribute_value(entries, name) do
+    Enum.find_value(entries, fn
+      {:@, _meta, [{^name, _inner, [value]}]} when is_binary(value) or value == false -> value
+      _entry -> nil
+    end)
+  end
+
+  defp attribute_strings(entries, name) do
+    entries
+    |> Enum.flat_map(fn
+      {:@, _meta, [{^name, _inner, [value]}]} -> [Macro.to_string(value)]
+      _entry -> []
+    end)
+    |> Enum.reverse()
+  end
+
+  defp build_clause(seed, ordinal, occurrence, evidence) do
+    clause_id = "clause:#{seed.function_id}:#{seed.fingerprint}:#{occurrence}"
 
     comparisons =
       seed.comparisons

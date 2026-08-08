@@ -36,7 +36,11 @@ defmodule TwoRavens.Qualifier do
            :ok <- Manifest.write(candidate_project, manifest),
            {:ok, before_format_graph} <- Source.rebuild(candidate_project, manifest),
            :ok <- semantic_equal(before_format_graph, proposed_graph, :materialize),
-           paths <- files |> Map.keys() |> Enum.sort(),
+           paths <-
+             files
+             |> Enum.reject(fn {_path, source} -> is_nil(source) end)
+             |> Enum.map(&elem(&1, 0))
+             |> Enum.sort(),
            {:ok, format_output} <- run_mix(candidate_root, ["format" | paths]),
            {:ok, formatted_files} <- read_files(candidate_project, paths),
            {:ok, formatted_graph} <- Source.rebuild(candidate_project, manifest),
@@ -58,7 +62,11 @@ defmodule TwoRavens.Qualifier do
 
         {:ok,
          %Result{
-           files: formatted_files,
+           files:
+             Map.merge(
+               Map.filter(files, fn {_path, source} -> is_nil(source) end),
+               formatted_files
+             ),
            graph: formatted_graph,
            evidence: Evidence.qualified(profile, output_bytes, 2)
          }}
@@ -77,13 +85,28 @@ defmodule TwoRavens.Qualifier do
   defp materialize(project, files) do
     Enum.reduce_while(files, :ok, fn {relative, source}, :ok ->
       with {:ok, absolute} <- Project.resolve(project, relative),
-           :ok <- AtomicFile.write(absolute, source) do
+           :ok <- materialize_file(absolute, source) do
         {:cont, :ok}
       else
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
   end
+
+  defp materialize_file(path, nil) do
+    case File.rm(path) do
+      :ok ->
+        :ok
+
+      {:error, :enoent} ->
+        :ok
+
+      {:error, reason} ->
+        {:error, %{code: :qualification_delete_failed, path: path, reason: reason}}
+    end
+  end
+
+  defp materialize_file(path, source), do: AtomicFile.write(path, source)
 
   defp read_files(project, paths) do
     Enum.reduce_while(paths, {:ok, %{}}, fn path, {:ok, files} ->

@@ -1,7 +1,7 @@
 defmodule TwoRavens.SemanticStore.Migration do
   @moduledoc "Forward-only schema migrations for local semantic memory."
 
-  @current_version 1
+  @current_version 2
 
   @doc "Returns the current supported schema version."
   @spec current_version() :: pos_integer()
@@ -148,6 +148,28 @@ defmodule TwoRavens.SemanticStore.Migration do
       """
       CREATE INDEX semantic_evidence_subject
       ON semantic_evidence(revision_id, subject_node_id, evidence_type)
+      """
+    ]
+  end
+
+  def statements(2) do
+    [
+      """
+      CREATE TABLE change_drafts (
+        draft_id TEXT NOT NULL,
+        version INTEGER NOT NULL CHECK (version > 0),
+        base_revision TEXT NOT NULL,
+        base_working_hash TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('ready', 'needs_changes')),
+        expires_at TEXT NOT NULL,
+        payload BLOB NOT NULL CHECK (length(payload) <= 5000000),
+        payload_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (draft_id, version)
+      ) STRICT
+      """,
+      """
+      CREATE INDEX change_drafts_expiry ON change_drafts(expires_at)
       """
     ]
   end

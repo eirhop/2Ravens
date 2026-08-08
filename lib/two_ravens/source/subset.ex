@@ -29,6 +29,7 @@ defmodule TwoRavens.Source.Subset do
 
   @spec top_level(Macro.t()) :: :supported | {:unsupported, String.t()}
   def top_level({:def, _meta, [_head, body]}) when is_list(body), do: :supported
+  def top_level({:defp, _meta, [_head, body]}) when is_list(body), do: :supported
   def top_level({:test, _meta, [_name, body]}) when is_list(body), do: :supported
 
   def top_level({:use, _meta, [{:__aliases__, _, [:ExUnit, :Case]} | _options]}),
@@ -39,6 +40,16 @@ defmodule TwoRavens.Source.Subset do
 
   def top_level({:@, _meta, [{:moduledoc, _inner_meta, [value]}]})
       when is_binary(value) or value == false,
+      do: :supported
+
+  def top_level({:@, _meta, [{:doc, _inner_meta, [value]}]})
+      when is_binary(value) or value == false,
+      do: :supported
+
+  def top_level({:@, _meta, [{:spec, _inner_meta, [_value]}]}), do: :supported
+
+  def top_level({:@, _meta, [{name, _inner_meta, [_value]}]})
+      when name in [:impl, :deprecated],
       do: :supported
 
   def top_level(other),
@@ -54,6 +65,9 @@ defmodule TwoRavens.Source.Subset do
     |> maybe_unsupported(valid_guard?(guard), "unsupported guard expression")
     |> maybe_unsupported(valid_expression?(body), "unsupported function body expression")
   end
+
+  def inside({:defp, _meta, [head, body_keyword]}),
+    do: inside({:def, [], [head, body_keyword]})
 
   def inside({:test, _meta, [name, body_keyword]}) do
     []

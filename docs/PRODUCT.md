@@ -116,16 +116,17 @@ trustworthy.
 
 ## MVP foundation
 
-Before Phase 1, 2Ravens runs two bounded experiments:
+Before Phase 1, 2Ravens runs bounded foundation experiments:
 
 | Foundation | Status | Product question | Primary proof |
 | --- | --- | --- | --- |
 | Greenfield semantic authoring | Implemented | Can an AI create and safely change a small Elixir system through 2Ravens? | Created source remains ordinary Elixir; derived relationships, minimal edits, qualification, and source-to-graph reconstruction are deterministic. |
-| Persistent semantic memory | Active | Does authoring-time intent and evidence reduce cumulative context across later work? | Semantic memory preserves facts unavailable to indexing and reaches context break-even without reducing correctness. |
+| Persistent semantic memory | Implemented; gate failed | Does authoring-time intent and evidence reduce cumulative context across later work? | Semantic memory preserved more facts and correctness but did not beat source indexing on cumulative context. |
+| Entity-based batch authoring | Next | Can an agent submit and repair semantic entity changes with materially fewer round trips than file or function-at-a-time authoring? | One cached draft qualifies once, edits exact entities, and projects ordinary source without whole-module merge. |
 
 The foundation remains narrower than the long-term product. It manages only its
-own files and supported Elixir subset. Comprehensive brownfield indexing begins
-after the semantic-memory gate.
+own files and supported Elixir subset. The entity API is designed for later
+brownfield importing, but comprehensive indexing remains Phase 1 work.
 
 ## The three phases
 

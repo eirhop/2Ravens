@@ -19,6 +19,7 @@ defmodule TwoRavens.Graph do
   alias TwoRavens.Source.Fragment
   alias TwoRavens.Source.Function
   alias TwoRavens.Source.Module
+  alias TwoRavens.Source.ModuleForm
   alias TwoRavens.Source.Test
 
   @doc "Builds nodes and derived edges from deterministic file fragments."
@@ -103,7 +104,8 @@ defmodule TwoRavens.Graph do
       |> Enum.map(fn
         {id, %Function{} = function} ->
           {id,
-           {:function, function.module, function.name, function.arity,
+           {:function, function.module, function.name, function.arity, function.documentation,
+            function.specifications,
             Enum.map(function.clauses, fn clause ->
               {clause.ordinal, clause.patterns, clause.guard,
                Enum.map(clause.comparisons, &{&1.operator, &1.left, &1.right}),
@@ -128,6 +130,7 @@ defmodule TwoRavens.Graph do
     values =
       Enum.flat_map(fragments, fn fragment ->
         [fragment.module] ++
+          fragment.module_forms ++
           fragment.functions ++
           Enum.flat_map(fragment.functions, fn function ->
             function.clauses ++ Enum.flat_map(function.clauses, & &1.comparisons)
@@ -154,9 +157,10 @@ defmodule TwoRavens.Graph do
   end
 
   defp identity_priority(%Module{}), do: 0
-  defp identity_priority(%Function{}), do: 1
-  defp identity_priority(%Test{}), do: 2
-  defp identity_priority(_node), do: 3
+  defp identity_priority(%ModuleForm{}), do: 1
+  defp identity_priority(%Function{}), do: 2
+  defp identity_priority(%Test{}), do: 3
+  defp identity_priority(_node), do: 4
 
   defp build_edges(fragments, nodes) do
     evidence = Evidence.derived_source()
@@ -174,7 +178,10 @@ defmodule TwoRavens.Graph do
         test_edges =
           Enum.map(fragment.tests, &edge(:defines, module_id, &1.id, &1.source, evidence))
 
-        function_edges ++ test_edges
+        form_edges =
+          Enum.map(fragment.module_forms, &edge(:defines, module_id, &1.id, &1.source, evidence))
+
+        form_edges ++ function_edges ++ test_edges
       end)
 
     calls =

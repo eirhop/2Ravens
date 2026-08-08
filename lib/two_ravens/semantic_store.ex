@@ -3,6 +3,7 @@ defmodule TwoRavens.SemanticStore do
 
   alias TwoRavens.AtomicFile
   alias TwoRavens.Authoring.Candidate
+  alias TwoRavens.Change.Draft
   alias TwoRavens.Manifest
   alias TwoRavens.Project
   alias TwoRavens.SemanticStore.Reconciliation
@@ -67,6 +68,36 @@ defmodule TwoRavens.SemanticStore do
   def schema_version(root) when is_binary(root) do
     with {:ok, project} <- Project.open(root) do
       SQLite.with_database(project, &SQLite.schema_version/1)
+    end
+  end
+
+  @doc false
+  @spec put_draft(Project.t(), Draft.t()) :: {:ok, Draft.t()} | {:error, map()}
+  def put_draft(%Project{} = project, %Draft{} = draft) do
+    SQLite.with_database(project, &SQLite.put_draft(&1, draft))
+  end
+
+  @doc false
+  @spec get_draft(Project.t(), String.t(), pos_integer()) ::
+          {:ok, Draft.t()} | {:error, map()}
+  def get_draft(%Project{} = project, id, version)
+      when is_binary(id) and is_integer(version) and version > 0 do
+    SQLite.with_database(project, &SQLite.get_draft(&1, id, version))
+  end
+
+  @doc false
+  @spec delete_draft(Project.t(), String.t()) :: :ok | {:error, map()}
+  def delete_draft(%Project{} = project, id) when is_binary(id) do
+    case SQLite.with_database(project, &delete_draft_from_connection(&1, id)) do
+      {:ok, :deleted} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp delete_draft_from_connection(connection, id) do
+    case SQLite.delete_draft(connection, id) do
+      :ok -> {:ok, :deleted}
+      {:error, reason} -> {:error, reason}
     end
   end
 

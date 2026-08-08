@@ -2,14 +2,15 @@
 
 ## Status
 
-Scope 01 implemented. Scope 02 semantic-memory experiment ready for
-implementation.
+Scope 01 and Scope 02 implemented. The active authoring contract is now the
+[entity authoring API](ENTITY_AUTHORING.md).
 
-Semantic editing is the first greenfield MVP foundation. It creates a narrow
-repository graph while authoring ordinary Elixir. Scope 02 persists stable
-identity, intent, derived facts, and evidence locally to test their cumulative
-context value. It does not replace the three later product phases or make the
-database the canonical source-code store.
+Semantic editing created a narrow repository graph while authoring ordinary
+Elixir. Scope 02 persisted stable identity, intent, derived facts, and evidence
+locally, but did not pass its cumulative-context gate against source indexing.
+The next experiment keeps its safety and source authority while replacing
+function-at-a-time file-shaped commands with ordered entity operations and
+repairable cached drafts.
 
 ## Purpose
 
@@ -39,7 +40,7 @@ remains clear should be selected for each change:
 ```text
 New or substantially changed code -> ordinary Elixir
 One known semantic property       -> compact semantic command
-Several related edits             -> deferred until single edits are proven
+Several related edits             -> ordered operations in one entity draft
 Repository understanding          -> context query
 ```
 
@@ -259,9 +260,10 @@ operation with `--apply` rebuilds the candidate, verifies that the revision and
 source hashes still match, writes the minimal working-tree patch, and re-indexes
 the affected files in one invocation. It does not create a Git commit.
 
-The first implementation does not include `remove`, `move`, `rename`, or batch
-scripts. Each adds semantic and safety rules that should be justified by a
-measured workflow.
+This original stateless CLI does not include `remove`, `move`, `rename`, or
+batch scripts. The newer [entity authoring API](ENTITY_AUTHORING.md) implements
+a bounded batch form of those operations behind stricter entity and draft
+rules; its separate completion gate remains open.
 
 ## Candidate model
 
@@ -323,27 +325,28 @@ label an uncompiled candidate as validated.
 MCP remains a transport, not the change model. The CLI and any future MCP tool
 must call the same ordinary Elixir API.
 
-The initial MVP does not add an MCP write tool. After the CLI contract is
-stable, a minimal MCP adapter may expose equivalent operations:
+The initial MVP did not add an MCP write tool. Scope 03 defines one decoded-map
+handler shaped for a future `ravens_change` tool:
 
 ```text
-set(at, to)
-create_module(name, source)
-create_function(module, source)
+change(root, base_revision | draft, commit, operations)
 ```
 
-The model supplies only tool arguments. The MCP host supplies the JSON-RPC
-envelope. Large Elixir bodies remain strings; the agent never serializes graph
-records manually.
+The model supplies an ordered operation list. The MCP host supplies the JSON-RPC
+envelope. Large Elixir bodies remain strings attached to new or exact entity
+targets; the agent never serializes graph records manually. Invalid large
+requests remain cached as versioned drafts so the agent can repair one entity
+without resending accepted fragments.
 
-Example model arguments for the small edit:
+Example model arguments for adding one function:
 
 ```json
-{"at":"r1:e7.operator","to":">"}
+{"base_revision":"r1","commit":"if_valid","operations":[{"op":"create","kind":"function","parent":"module:RavensShop.Pricing","text":"def total(subtotal, tier), do: subtotal - discount(subtotal, tier)"}]}
 ```
 
-The MCP adapter is justified only if it improves compatibility or total task
-cost over invoking the CLI through an existing shell tool.
+The complete operation, clause, draft, and projection contract is in
+[Entity authoring API](ENTITY_AUTHORING.md). The adapter remains justified only
+if it improves compatibility or total task cost over an existing shell tool.
 
 ## Cumulative context evaluation
 
@@ -467,8 +470,9 @@ The semantic-authoring MVP met its technical gate:
 - The comparative workflow records tokens or bytes, operations, corrections,
   correctness, and review evidence without inventing a favorable result.
 
-Its mechanics benchmark did not show efficiency, so more edit verbs remain
-deferred. The next implementation and product gate is
-[Scope 02](scopes/02-semantic-memory-mvp.md): persistent semantic memory must
-preserve unique useful facts and reduce cumulative context without lowering
-correctness.
+Its mechanics benchmark did not show efficiency. Scope 02 then implemented
+persistent semantic memory but did not beat source indexing on cumulative
+context. The next implementation is
+[Scope 03](scopes/03-entity-authoring-mvp.md): submit related entity operations
+once, cache invalid drafts, and qualify one candidate without permitting
+whole-existing-module merge.

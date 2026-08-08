@@ -12,7 +12,7 @@ defmodule TwoRavens.Authoring.CandidateBuilder do
       proposal.files
       |> Enum.sort()
       |> Enum.map_join(fn {path, after_source} ->
-        Diff.unified(path, Map.get(proposal.before_files, path, ""), after_source)
+        Diff.unified(path, Map.get(proposal.before_files, path, ""), after_source || "")
       end)
 
     %Candidate{
@@ -51,7 +51,7 @@ defmodule TwoRavens.Authoring.CandidateBuilder do
 
   defp changed_line_count(before_files, after_files) do
     Enum.reduce(after_files, 0, fn {path, after_source}, count ->
-      count + Diff.changed_lines(Map.get(before_files, path, ""), after_source)
+      count + Diff.changed_lines(Map.get(before_files, path, ""), after_source || "")
     end)
   end
 end

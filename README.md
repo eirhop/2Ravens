@@ -4,10 +4,10 @@
 
 2Ravens is a local semantic authoring and understanding layer for Elixir. Its
 first MVP safely creates and edits a constrained greenfield project through
-ordinary Elixir. The active experiment adds authoring-time semantic memory to
-test whether persisted intent and evidence reduce cumulative AI context. Later
-phases extend the graph to arbitrary repositories, behavior review, and runtime
-understanding.
+ordinary Elixir. Local semantic memory is implemented, and the active
+experiment now batches exact module, function, clause, and module-form changes
+into repairable entity drafts. Later phases extend the graph to arbitrary
+repositories, behavior review, and runtime understanding.
 
 After the write-first MVP foundation, the product is planned in three phases:
 
@@ -28,6 +28,7 @@ account, API key, cloud service, embedding model, or external database.
 - [Product plan](docs/PRODUCT.md)
 - [Context query](docs/QUERY.md)
 - [Semantic editing](docs/EDITING.md)
+- [Entity authoring API](docs/ENTITY_AUTHORING.md)
 - [Authoring-time semantic memory](docs/SEMANTIC_MEMORY.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -45,9 +46,10 @@ boundaries.
 
 ## Status
 
-The [greenfield semantic-authoring MVP](docs/scopes/01-greenfield-authoring-mvp.md)
-is implemented. It manages only source created through 2Ravens, rebuilds its
-graph on every command, and qualifies explicit writes in an isolated project.
-Its mechanics benchmark did not demonstrate efficiency. The active next step is
-the [persistent semantic-memory MVP](docs/scopes/02-semantic-memory-mvp.md),
-which measures cumulative context value rather than initial write speed.
+The greenfield authoring and persistent semantic-memory MVPs are implemented.
+Their safety and persistence gates passed, but their efficiency comparisons
+were unfavorable. The
+[entity-based batch authoring MVP](docs/scopes/03-entity-authoring-mvp.md) now
+has a working first vertical slice: one repairable request edits exact semantic
+entities and qualifies once while ordinary source remains recoverable. Its
+completion gate and comparative agent probe remain open.

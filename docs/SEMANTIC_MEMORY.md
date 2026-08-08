@@ -2,7 +2,7 @@
 
 ## Status
 
-Active MVP hypothesis. Not yet validated.
+Implemented experiment; product gate failed against source indexing.
 
 The first greenfield authoring slice proved that 2Ravens can safely create,
 query, and semantically edit ordinary Elixir. Its mechanics benchmark did not
@@ -11,8 +11,12 @@ substantially more author-facing output, and more qualification work. Model
 token counts were unavailable. See the recorded
 [greenfield baseline](../benchmarks/greenfield_authoring/baseline.md).
 
-That benchmark remains valid for the workflow it measured. It did not test the
-reason for persisting a semantic model.
+That benchmark remains valid for the workflow it measured. Scope 02 later
+proved that the persisted model can preserve requested facts and improve task
+correctness, but its frozen lifecycle did not beat source indexing on cumulative
+context. The store therefore remains bounded infrastructure, while the next
+experiment reduces authoring round trips through the
+[entity authoring API](ENTITY_AUTHORING.md).
 
 ## Revised product hypothesis
 

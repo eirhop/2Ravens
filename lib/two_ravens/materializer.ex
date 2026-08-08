@@ -63,13 +63,23 @@ defmodule TwoRavens.Materializer do
     |> Enum.sort()
     |> Enum.reduce_while(:ok, fn {path, source}, :ok ->
       with {:ok, absolute} <- Project.resolve(project, path),
-           :ok <- AtomicFile.write(absolute, source) do
+           :ok <- write_file(absolute, source) do
         {:cont, :ok}
       else
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
   end
+
+  defp write_file(path, nil) do
+    case File.rm(path) do
+      :ok -> :ok
+      {:error, :enoent} -> :ok
+      {:error, reason} -> {:error, %{code: :source_delete_failed, path: path, reason: reason}}
+    end
+  end
+
+  defp write_file(path, source), do: AtomicFile.write(path, source)
 
   defp semantic_equal(accepted_graph, proposed_graph) do
     if Graph.semantic_signature(accepted_graph) == Graph.semantic_signature(proposed_graph),

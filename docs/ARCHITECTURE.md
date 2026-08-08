@@ -86,9 +86,10 @@ Repository graph = source-derived and memory-enriched projection
 
 2Ravens keeps a small versioned manifest of paths it created during the MVP;
 that manifest grants write scope but does not duplicate source or graph facts.
-2Ravens-specific code annotations are not part of the architecture. Ordinary
-documentation, typespecs, behaviours, tests, routes, callbacks, and other
-Elixir constructs are indexed because they are already part of the system.
+2Ravens-specific code annotations and authoring macros are not part of the
+architecture. Ordinary documentation, typespecs, behaviours, tests, routes,
+callbacks, and other Elixir constructs are indexed because they are already
+part of the system.
 
 When a relationship cannot be derived, the graph records it as unresolved or
 unknown rather than adding a duplicated declaration that can become stale.
@@ -534,13 +535,16 @@ It is rejected when the base revision, file hash, or structure is stale.
 
 A candidate is immutable and unapplied. It records requested operations,
 resolved targets, source and graph deltas, affected execution envelopes,
-qualification evidence, and diagnostics. Correcting a candidate creates a new
-candidate.
+qualification evidence, and diagnostics. Scope 03 persists versioned temporary
+drafts so correcting one entity creates a new draft version without resending
+the original large request. This is cached state, never a long-running SQL
+transaction.
 
-Operations never write graph storage records directly. `create module` and
-`create function` accept ordinary Elixir. `set` changes one allowed
-source-derived property. Parsing, compiler reconciliation, and tests continue
-to derive relationships and evidence.
+Operations never write graph storage records directly. Free-form ordinary
+Elixir may create only entirely new modules. Existing code is changed through
+exact module-child, function, clause, or module-form targets; there is no
+whole-existing-module merge or implicit deletion. Parsing, compiler
+reconciliation, and tests continue to derive relationships and evidence.
 
 Before apply, 2Ravens materializes the candidate source, rebuilds affected graph
 fragments, and compares that rebuilt graph with the candidate graph. A mismatch
@@ -644,7 +648,7 @@ Scope 01 implemented:
 - CLI-first creation, candidate qualification, context, `set`, and `--apply`
 - Disposable greenfield-project integration tests
 
-Scope 02 adds:
+Scope 02 implemented:
 
 - One local SQLite file beneath `.ravens/`
 - `Exqlite` behind a small semantic-store boundary without Ecto
@@ -655,6 +659,10 @@ Scope 02 adds:
 - Source/store freshness and reconciliation
 - Compact success output
 - A three-condition cumulative lifecycle benchmark
+
+Scope 03 next adds ordered entity operations, versioned repairable drafts,
+multi-module creation input, clause child editing, and one JSON-shaped transport
+handler while retaining managed-source boundaries.
 
 Phase 1 later adds general repository indexing, compiler reconciliation, the
 complete context query, real-repository benchmarks, and one local STDIO MCP
@@ -669,20 +677,20 @@ and portable semantic synchronization remain evidence-driven choices.
 - Runtime-agent transport and isolation model
 - Distributed runtime observation
 - Production observation
-- MCP write tools
-- Persistent candidate storage
+- A full MCP server and plugin packaging
+- Portable or multi-writer draft storage
 - Portable semantic-memory export, merge, and synchronization
 - Alternative embedded storage technology
-- General brownfield importing during the MVP
-- Semantic edit operations beyond the validated creation and `set` slices
+- General brownfield importing during the managed entity-authoring MVP
 
 All future choices must preserve local operation and inspectable results.
 
 ## Architectural principles
 
 1. Build the repository graph independently of a user task.
-2. Preserve requested intent with provenance; derive structural and behavioral
-   relationships from code and evidence rather than custom annotations.
+2. Preserve ordinary source documentation and accepted operation history with
+   provenance; derive structural and behavioral relationships from code and
+   evidence rather than custom annotations.
 3. Source and Git when present remain authoritative; tests and runtime provide
    evidence.
 4. Every fact has inspectable provenance, confidence, revision, and freshness.
