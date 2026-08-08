@@ -3,6 +3,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
 
   alias TwoRavens.Authoring
   alias TwoRavens.Change
+  alias TwoRavens.Change.Receipt
   alias TwoRavens.MCP.Change, as: MCPChange
   alias TwoRavens.Semantic.Revision
   alias TwoRavens.Source
@@ -26,7 +27,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
   test "one MCP request creates modules and later operations see earlier entities", %{root: root} do
     request = %{
       "root" => root,
-      "commit" => "if_valid",
+      "mode" => "apply_if_valid",
       "operations" => [
         %{
           "op" => "create",
@@ -73,13 +74,113 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert Map.has_key?(graph.nodes, "function:EntityShop.Pricing.subtotal/2")
   end
 
+  test "one source bundle atomically accepts production and ExUnit modules with aliases", %{
+    root: root
+  } do
+    assert {:ok, pricing} =
+             Change.submit(root, %{
+               "mode" => "apply_if_valid",
+               "operations" => [
+                 %{
+                   "op" => "create",
+                   "kind" => "source_bundle",
+                   "text" => """
+                   defmodule EntityShop.Pricing do
+                     @moduledoc "Calculates net prices."
+                     def net_merchandise(_sku, quantity, _tier, _channel, _promotion),
+                       do: 2_500 * quantity
+                   end
+                   """
+                 }
+               ]
+             })
+
+    assert pricing.status == :applied
+    assert {:ok, graph} = Source.rebuild(root)
+    revision = Revision.from_repository(graph.revision, :available).id
+
+    request = %{
+      "base_revision" => revision,
+      "mode" => "apply_if_valid",
+      "operations" => [
+        %{
+          "op" => "create",
+          "kind" => "source_bundle",
+          "text" => """
+          defmodule EntityShop.TaxPolicy do
+            @moduledoc "Calculates regional taxes."
+
+            @type region :: :norway | :sweden | :denmark | :germany | :export
+
+            def rate(:norway), do: 25
+            def rate(:sweden), do: 25
+            def rate(:denmark), do: 25
+            def rate(:germany), do: 19
+            def rate(:export), do: 0
+
+            @spec tax_cents(non_neg_integer(), region()) :: non_neg_integer()
+            def tax_cents(net, region), do: div(net * rate(region), 100)
+          end
+
+          defmodule EntityShop.Totals do
+            @moduledoc "Calculates order totals."
+
+            alias EntityShop.{Pricing, TaxPolicy}
+
+            @type region :: TaxPolicy.region()
+
+            def calculate(sku, quantity, tier, channel, promotion, region) do
+              net = Pricing.net_merchandise(sku, quantity, tier, channel, promotion)
+              tax = TaxPolicy.tax_cents(net, region)
+              {net, tax, net + tax}
+            end
+          end
+
+          defmodule EntityShop.TotalsTest do
+            use ExUnit.Case, async: true
+
+            alias EntityShop.{TaxPolicy, Totals}
+
+            describe "tax rates" do
+              test "calculates regional tax" do
+                assert TaxPolicy.rate(:norway) == 25
+              end
+            end
+
+            describe "taxed totals" do
+              test "calculates taxed total" do
+                assert Totals.calculate(:atlas, 2, :standard, :retail, :none, :norway) ==
+                         {5_000, 1_250, 6_250}
+              end
+            end
+          end
+          """
+        }
+      ],
+      "return" => [
+        %{"focus" => "module:EntityShop.TaxPolicy", "include" => ["functions"]},
+        %{"focus" => "module:EntityShop.Totals", "include" => ["functions"]},
+        %{"focus" => "module:EntityShop.TotalsTest", "include" => ["tests"]}
+      ]
+    }
+
+    assert {:ok, receipt} = Change.submit(root, request)
+    assert receipt.status == :applied
+    assert receipt.operation_count == 1
+    assert receipt.affected_paths == 3
+    assert receipt.qualification.commands == 2
+    assert receipt.qualification.tests == :pass
+    assert receipt.selected_from == %{revision: receipt.revision}
+    assert length(receipt.selected) == 3
+  end
+
   test "a failed qualification remains a repairable immutable draft", %{root: root} do
     assert {:ok, graph} = Source.rebuild(root)
     revision = Revision.from_repository(graph.revision, :available).id
 
     invalid = %{
       "base_revision" => revision,
-      "commit" => "if_valid",
+      "mode" => "apply_if_valid",
       "operations" => [
         %{
           "op" => "create",
@@ -102,7 +203,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     repair = %{
       "draft" => failed.draft,
       "draft_version" => failed.draft_version,
-      "commit" => "if_valid",
+      "mode" => "apply_if_valid",
       "operations" => [
         %{
           "op" => "replace",
@@ -121,7 +222,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     root: root
   } do
     request = %{
-      "commit" => "if_valid",
+      "mode" => "apply_if_valid",
       "operations" => [
         %{
           "op" => "create",
@@ -147,7 +248,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
 
     add_clause = %{
       "base_revision" => revision,
-      "commit" => "if_valid",
+      "mode" => "apply_if_valid",
       "operations" => [
         %{
           "op" => "create",
@@ -168,9 +269,27 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
   end
 
   test "public validation rejects unknown fields and module replacement", %{root: root} do
+    assert {:error, %{code: :invalid_request_id}} =
+             Change.submit(root, %{
+               "request_id" => "contains spaces",
+               "mode" => "draft_only",
+               "operations" => [%{"op" => "delete", "target" => "module:X"}]
+             })
+
+    assert {:error, %{code: :mode_required}} =
+             Change.submit(root, %{
+               "operations" => [%{"op" => "delete", "target" => "module:X"}]
+             })
+
+    assert {:error, %{code: :unknown_request_fields, details: %{fields: ["commit"]}}} =
+             Change.submit(root, %{
+               "commit" => "if_valid",
+               "operations" => [%{"op" => "delete", "target" => "module:X"}]
+             })
+
     assert {:error, request_error} =
              Change.submit(root, %{
-               "commit" => "draft_only",
+               "mode" => "draft_only",
                "include" => ["source"],
                "operations" => [%{"op" => "delete", "target" => "module:X"}]
              })
@@ -179,7 +298,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
 
     assert {:error, kind_error} =
              Change.submit(root, %{
-               "commit" => "draft_only",
+               "mode" => "draft_only",
                "operations" => [
                  %{
                    "op" => "create",
@@ -194,7 +313,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
 
     assert {:error, error} =
              Change.submit(root, %{
-               "commit" => "draft_only",
+               "mode" => "draft_only",
                "operations" => [%{"op" => "delete", "target" => "module:X", "surprise" => true}]
              })
 
@@ -206,6 +325,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert {:error, error} =
              Change.submit(root, %{
                "base_revision" => revision,
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "replace",
@@ -221,6 +341,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
   test "entity lifecycle operations remain atomic and remove retired projections", %{root: root} do
     assert {:ok, _receipt} =
              Change.submit(root, %{
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "create",
@@ -249,6 +370,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert {:ok, receipt} =
              Change.submit(root, %{
                "base_revision" => revision,
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "rename",
@@ -280,6 +402,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
   } do
     assert {:ok, _receipt} =
              Change.submit(root, %{
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "create",
@@ -305,6 +428,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert {:ok, _receipt} =
              Change.submit(root, %{
                "base_revision" => revision,
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "patch",
@@ -333,7 +457,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
   test "draft context is compact and old immutable versions are rejected", %{root: root} do
     assert {:ok, ready} =
              Change.submit(root, %{
-               "commit" => "draft_only",
+               "mode" => "draft_only",
                "operations" => [
                  %{
                    "op" => "create",
@@ -366,7 +490,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
              Change.submit(root, %{
                "draft" => ready.draft,
                "draft_version" => ready.draft_version,
-               "commit" => "draft_only",
+               "mode" => "draft_only",
                "operations" => [
                  %{
                    "op" => "replace",
@@ -389,9 +513,160 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert stale.code == :stale_draft_version
   end
 
+  test "an unchanged qualified ready draft applies without resending operations", %{root: root} do
+    assert {:ok, ready} =
+             Change.submit(root, %{
+               "mode" => "draft_only",
+               "operations" => [
+                 %{
+                   "op" => "create",
+                   "kind" => "source_bundle",
+                   "text" => """
+                   defmodule EntityShop.ReadyDraft do
+                     @moduledoc "A qualified candidate applied in a later request."
+                     def value, do: :ready
+                   end
+                   """
+                 }
+               ]
+             })
+
+    refute File.exists?(Path.join(root, "lib/entity_shop/ready_draft.ex"))
+
+    assert {:ok, applied} =
+             Change.submit(root, %{
+               "draft" => ready.draft,
+               "draft_version" => ready.draft_version,
+               "mode" => "apply_if_valid"
+             })
+
+    assert applied.status == :applied
+    assert applied.operation_count == 1
+    assert applied.qualification == ready.qualification
+    assert applied.working_tree_changed
+    assert File.read!(Path.join(root, "lib/entity_shop/ready_draft.ex")) =~ "def value"
+
+    assert {:error, missing} =
+             Change.draft_context(
+               root,
+               ready.draft,
+               ready.draft_version,
+               "function:EntityShop.ReadyDraft.value/0"
+             )
+
+    assert missing.code == :draft_not_found
+  end
+
+  test "accepted request IDs replay exactly and reject conflicting reuse", %{root: root} do
+    request = %{
+      "request_id" => "epic-2.tax-policy:v1",
+      "mode" => "apply_if_valid",
+      "operations" => [
+        %{
+          "op" => "create",
+          "kind" => "source_bundle",
+          "text" => """
+          defmodule EntityShop.Idempotent do
+            @moduledoc "Created exactly once."
+            def value, do: 1
+          end
+          """
+        }
+      ],
+      "return" => [
+        %{"focus" => "module:EntityShop.Idempotent", "include" => ["functions"]}
+      ]
+    }
+
+    assert {:ok, first} = Change.submit(root, request)
+    source_path = Path.join(root, "lib/entity_shop/idempotent.ex")
+    source = File.read!(source_path)
+    manifest = File.read!(Path.join(root, ".ravens/manifest"))
+
+    assert {:ok, replayed} = Change.submit(root, request)
+
+    assert replayed |> Map.from_struct() |> Jason.encode!() |> Jason.decode!() ==
+             first |> Map.from_struct() |> Jason.encode!() |> Jason.decode!()
+
+    assert replayed.selected != []
+    assert replayed.selected_from == %{revision: first.revision}
+    assert File.read!(source_path) == source
+    assert File.read!(Path.join(root, ".ravens/manifest")) == manifest
+
+    conflicting =
+      put_in(
+        request,
+        ["operations", Access.at(0), "text"],
+        """
+        defmodule EntityShop.Different do
+          def value, do: 2
+        end
+        """
+      )
+
+    assert {:error, conflict} = Change.submit(root, conflicting)
+    assert conflict.code == :request_id_conflict
+    assert conflict.details.request_id == "epic-2.tax-policy:v1"
+    assert File.read!(source_path) == source
+    refute File.exists?(Path.join(root, "lib/entity_shop/different.ex"))
+
+    assert {:ok, revision} = Change.current_revision(root)
+
+    assert {:ok, later} =
+             Change.submit(root, %{
+               "base_revision" => revision,
+               "mode" => "apply_if_valid",
+               "operations" => [
+                 %{
+                   "op" => "create",
+                   "kind" => "source_bundle",
+                   "text" => "defmodule EntityShop.Later do\n  def value, do: :later\nend"
+                 }
+               ]
+             })
+
+    assert later.status == :applied
+    assert {:error, stale} = Change.submit(root, request)
+    assert stale.code == :request_id_stale
+    assert stale.details.result_revision == first.revision
+    assert stale.details.current_revision == later.revision
+  end
+
+  test "accepted receipt decoding rejects malformed or wrongly typed JSON" do
+    assert {:error, %{code: :accepted_request_corrupt}} = Receipt.load("not-json")
+
+    corrupt =
+      %Receipt{
+        status: :applied,
+        operation_count: 1,
+        revision: "revision:r_test",
+        entities: %{create: 1},
+        relationships: %{},
+        qualification: %{
+          format: :pass,
+          compile: :pass,
+          tests: :pass,
+          commands: 2,
+          output_bytes: 0
+        },
+        affected_paths: 1,
+        diagnostics: [],
+        selected: [],
+        selected_from: %{revision: "revision:r_test"},
+        working_tree_changed: true
+      }
+      |> Receipt.dump()
+      |> Jason.decode!()
+      |> Map.put("operation_count", "one")
+      |> Jason.encode!()
+
+    assert {:error, %{code: :accepted_request_corrupt}} = Receipt.load(corrupt)
+  end
+
   test "new module projection places public callers before private helpers", %{root: root} do
     assert {:ok, _receipt} =
              Change.submit(root, %{
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "create",
@@ -419,6 +694,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
   test "function and module-form operations cannot cross entity boundaries", %{root: root} do
     assert {:ok, _receipt} =
              Change.submit(root, %{
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "create",
@@ -445,6 +721,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert {:ok, change_receipt} =
              Change.submit(root, %{
                "base_revision" => revision,
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "rename",
@@ -475,6 +752,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert {:ok, _receipt} =
              Change.submit(root, %{
                "base_revision" => changed_revision,
+               "mode" => "apply_if_valid",
                "operations" => [%{"op" => "delete", "target" => changed_form.id}]
              })
 
@@ -487,6 +765,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert {:error, function_error} =
              Change.submit(root, %{
                "base_revision" => current_revision,
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "create",
@@ -502,6 +781,7 @@ defmodule TwoRavens.ChangeEntityAuthoringTest do
     assert {:error, form_error} =
              Change.submit(root, %{
                "base_revision" => current_revision,
+               "mode" => "apply_if_valid",
                "operations" => [
                  %{
                    "op" => "create",

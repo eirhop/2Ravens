@@ -2,10 +2,14 @@ defmodule TwoRavens.Context do
   @moduledoc "Persisted function context with freshness-checked source opt-in."
 
   alias TwoRavens.Authoring.Options
+  alias TwoRavens.Authoring.Support
   alias TwoRavens.Context.Result
   alias TwoRavens.EditHandle
   alias TwoRavens.Graph
+  alias TwoRavens.Manifest
   alias TwoRavens.Project
+  alias TwoRavens.Selection
+  alias TwoRavens.Selector
   alias TwoRavens.SemanticStore
   alias TwoRavens.Source
 
@@ -25,6 +29,31 @@ defmodule TwoRavens.Context do
 
   def query(root, focus, _options),
     do: {:error, %{code: :invalid_arguments, arguments: %{root: root, focus: focus}}}
+
+  @doc "Returns several bounded semantic selections from one exact managed-source revision."
+  @spec batch(Path.t(), map()) :: {:ok, map()} | {:error, map()}
+  def batch(root, %{"select" => selectors} = request)
+      when is_binary(root) and map_size(request) == 1 do
+    with {:ok, selectors} <- Selector.validate(selectors),
+         {:ok, freshness} <- SemanticStore.synchronize(root),
+         {:ok, project} <- Project.open(root),
+         {:ok, manifest} <- Manifest.load(project),
+         {:ok, graph} <- Source.rebuild(project, manifest),
+         :ok <- ensure_same_revision(graph, freshness.revision.working_hash),
+         {:ok, files} <- load_files(project, manifest),
+         {:ok, results} <- Selection.resolve(graph, files, selectors) do
+      {:ok,
+       %{
+         base_revision: freshness.revision.id,
+         freshness: Map.drop(freshness, [:revision]),
+         results: results,
+         truncated: Enum.any?(results, &Map.get(&1, :truncated, false))
+       }}
+    end
+  end
+
+  def batch(_root, _request),
+    do: {:error, %{code: :invalid_arguments, reason: :exact_select_field_required}}
 
   defp validate_options(options) do
     case Options.validate(options,
@@ -193,5 +222,14 @@ defmodule TwoRavens.Context do
       %{^path => fragment} -> {:ok, fragment}
       _ -> {:error, %{code: :managed_fragment_not_found, path: path}}
     end
+  end
+
+  defp load_files(project, manifest) do
+    Enum.reduce_while(manifest.managed_paths, {:ok, %{}}, fn path, {:ok, files} ->
+      case Support.read_source(project, path) do
+        {:ok, source} -> {:cont, {:ok, Map.put(files, path, source)}}
+        error -> {:halt, error}
+      end
+    end)
   end
 end

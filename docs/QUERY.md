@@ -44,11 +44,11 @@ MCP server: two_ravens
 MCP tool:   context
 ```
 
-The MVP implements the Mix task and ordinary Elixir API first. MCP remains
-deferred until the local authoring and read-back contracts are stable.
+The MVP exposes the ordinary Elixir API, Mix task, and project-bound
+`ravens_context` tool documented in [Local MCP server](MCP.md).
 
-The Mix task is the first development and diagnostic interface. The local
-STDIO MCP server is the preferred agent interface once the contract is stable.
+The Mix task remains the development and diagnostic interface. The local STDIO
+MCP server is the preferred agent interface.
 Both must call the same Elixir API and return the same logical response.
 
 ## Focus
@@ -153,6 +153,13 @@ prefer paths such as:
 
 The graph always retains these facts when indexed. `include` controls response
 cost, not truth or traversal semantics.
+
+The exact module selector supports `include: tests`. It returns a bounded list
+of test identities and names plus the managed functions each test can reach
+through statically derived calls. These targets are structural evidence, not
+runtime coverage. Ordinary static aliases, including grouped aliases and
+`as:`, are resolved before deriving those call paths; dynamic alias expressions
+remain explicit uncertainty.
 
 ## Input constraints
 

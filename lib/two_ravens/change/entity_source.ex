@@ -8,6 +8,7 @@ defmodule TwoRavens.Change.EntitySource do
   alias TwoRavens.Source.Clause
   alias TwoRavens.Source.Function
   alias TwoRavens.Source.ModuleForm
+  alias TwoRavens.Source.Test
 
   @type state :: %{files: %{String.t() => String.t() | nil}, manifest: TwoRavens.Manifest.t()}
 
@@ -44,6 +45,13 @@ defmodule TwoRavens.Change.EntitySource do
   def locate(graph, files, "module_form:" <> _rest = id) do
     case Map.get(graph.nodes, id) do
       %ModuleForm{} = form -> ranged(files, form.source, :module_form, id, form.module)
+      _other -> {:error, %{code: :entity_not_found, target: id}}
+    end
+  end
+
+  def locate(graph, files, "test:" <> _rest = id) do
+    case Map.get(graph.nodes, id) do
+      %Test{} = test -> ranged(files, test.source, :test, id, test.module, %{name: test.name})
       _other -> {:error, %{code: :entity_not_found, target: id}}
     end
   end
@@ -142,6 +150,45 @@ defmodule TwoRavens.Change.EntitySource do
     end
   end
 
+  @spec validate_test(String.t()) :: {:ok, Test.t()} | {:error, map()}
+  def validate_test(text) when is_binary(text) do
+    wrapper =
+      "defmodule TwoRavens.TestFragment do\n  use ExUnit.Case\n#{Support.indent(String.trim(text))}\nend\n"
+
+    with {:ok, source} <- Support.format(wrapper, "test_fragment.exs"),
+         {:ok, fragment} <- Source.parse("test_fragment.exs", source),
+         [%Test{} = test] <- fragment.tests,
+         :ok <- test_only(fragment) do
+      {:ok, test}
+    else
+      [] -> {:error, %{code: :invalid_test_fragment, reason: :test_required}}
+      [_first | _rest] -> {:error, %{code: :invalid_test_fragment, reason: :one_test_required}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @spec validate_test(String.t(), String.t()) :: {:ok, Test.t()} | {:error, map()}
+  def validate_test(text, expected_name) when is_binary(text) and is_binary(expected_name) do
+    with {:ok, test} <- validate_test(text),
+         true <- test.name == expected_name do
+      {:ok, test}
+    else
+      false -> {:error, %{code: :replacement_identity_mismatch}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp test_only(fragment) do
+    allowed_forms? =
+      Enum.all?(fragment.module_forms, &String.starts_with?(&1.form, "use ExUnit.Case"))
+
+    if fragment.module.documentation == nil and fragment.functions == [] and allowed_forms? do
+      :ok
+    else
+      {:error, %{code: :invalid_test_fragment, reason: :test_only_required}}
+    end
+  end
+
   @spec validate_clause(String.t(), Function.t()) :: {:ok, map()} | {:error, map()}
   def validate_clause(text, target) do
     with {:ok, function} <- validate_function(text),
@@ -156,18 +203,23 @@ defmodule TwoRavens.Change.EntitySource do
   end
 
   defp ranged(files, range, kind, id, module) do
+    ranged(files, range, kind, id, module, %{})
+  end
+
+  defp ranged(files, range, kind, id, module, attributes) do
     source = Map.fetch!(files, range.path)
 
-    {:ok,
-     %{
-       kind: kind,
-       id: id,
-       module: module,
-       path: range.path,
-       start_line: range.start_line,
-       end_line: range.end_line,
-       source: Source.select(source, range)
-     }}
+    entity = %{
+      kind: kind,
+      id: id,
+      module: module,
+      path: range.path,
+      start_line: range.start_line,
+      end_line: range.end_line,
+      source: Source.select(source, range)
+    }
+
+    {:ok, Map.merge(entity, attributes)}
   end
 
   defp function_module(%Graph{} = graph, id) do

@@ -2,19 +2,20 @@
 
 ## Status
 
-First vertical slice implemented; completion gate not yet met.
+Core vertical slice implemented; agent-boundary follow-up delivered in
+[Scope 04](04-agent-authoring-ergonomics.md).
 
 The current implementation provides strict ordered requests, multi-module
 source bundles, exact function/clause/module-form operations, versioned SQLite
 drafts for qualification failures, one qualification per batch, atomic
-managed-path materialization, and `mix ravens change`/`draft-context` local CLI
-transport. The focused integration suite exercises these paths across separate
-CLI processes and through the decoded-map MCP adapter.
+managed-path materialization, local CLI transport, and a project-bound STDIO
+MCP server. `ravens_context` batches several semantic selections at one
+revision, while `ravens_change` can return selected qualified function source
+and module inventories with the mutation receipt. The focused integration suite
+exercises these paths through separate CLI processes and a real spawned MCP
+process.
 
-The following scope requirements remain explicit gaps:
-
-- Requests that fail operation application before qualification return a
-  structured error but are not yet retained as repairable drafts.
+The following deeper authoring requirements remain explicit gaps:
 - Typed literal `set` handles are not exposed; only comparison operators and
   module documentation are supported.
 - Function rename and cross-module move block when callers exist instead of
@@ -24,15 +25,35 @@ The following scope requirements remain explicit gaps:
 - Cascade receipts count children but do not enumerate their identities;
   relationship deltas are not populated.
 - Script and top-level-form editing remain unimplemented.
-- The reproducible live-agent probe and comparative measurements required by
-  the completion gate have not been run.
+- The repaired real-MCP Epic 2 probe completed correctly with one context call,
+  one bundled change, one qualification, no repair, and no direct source
+  access. It used 13 tool-call wrappers and 641,913 total tokens, down from 30
+  and 1,392,315. It beat the improved CLI condition on calls, tokens, and wall
+  time, but still used 24.2% more total tokens than files-only. The intended MCP
+  workflow is demonstrated; a token advantage on a small greenfield feature is
+  not.
+- The later [three-job Luna lifecycle](../../benchmarks/entity_authoring/lifecycle_luna_2026-08-08.md)
+  finished correctly in both conditions, but Ravens used 54.1% more total tokens,
+  20.5% more wrappers, and 51.3% more wall time cumulatively. Epic 3's ideal path
+  was about 30% cheaper; malformed bundle envelopes, namespace guessing, and an
+  awkward test-module repair erased that gain in Epics 4–5. The scaling
+  efficiency hypothesis is not demonstrated.
+
+Scope 04 subsequently delivered retained pre-qualification request repair,
+canonical discovery, tolerant selector corrections, and exact test editing.
+Its final paired lifecycle reversed the earlier result: Ravens used 48.4% fewer
+total tokens, 45.5% fewer wrappers, and 38.4% less wall time. Replication remains
+required before making a general efficiency claim.
 
 Scope 01 proved safe managed source materialization. Scope 02 implemented local
 semantic memory in commit `83630db`, but its frozen lifecycle gate remained
-unfavorable against source-indexed cumulative context. A live Luna authoring
+unfavorable against source-indexed cumulative context. A clean Luna authoring
 probe then demonstrated correct semantic creation while exposing excessive
-command round trips, repeated qualification, Windows standard-input friction,
-and discarded invalid submissions.
+command discovery, confusing apply terminology, JSON escaping friction, and a
+parser frontier for ordinary local bindings. Follow-ups added a compact CLI
+guide, an explicit request mode, supported sequential local bindings, batched
+context, requested post-change evidence, and real MCP transport without
+weakening uncertainty.
 
 This scope tests the accepted [entity authoring API](../ENTITY_AUTHORING.md).
 It is a new authoring workflow hypothesis, not a retroactive favorable reading
@@ -77,10 +98,14 @@ A valid request whose candidate needs repair returns an `:ok` receipt with
 diagnostics, and no working-tree changes. Malformed public arguments, unsafe
 roots, stale draft versions, and unavailable projects return structured errors.
 
-Add a transport adapter that accepts the decoded JSON-shaped map intended for a
-future `ravens_change` MCP tool and delegates to the same facade. A small local
-CLI may submit the identical JSON through standard input or a request file. Do
-not build a general MCP server in this scope.
+The decoded-map transport and project-bound STDIO MCP server delegate to the
+same public facades. `ravens_change` and `ravens_context` use the shared strict
+selector contract documented in [Local MCP server](../MCP.md).
+
+An optional bounded `request_id` makes accepted apply retries idempotent. Its
+request hash and compact receipt commit in the same semantic-store transaction;
+different input conflicts, and a later current revision makes the old receipt
+explicitly stale.
 
 ## Request contract
 
@@ -92,17 +117,20 @@ The minimum envelope is:
 ```elixir
 %{
   "base_revision" => "r_...",
-  "commit" => "if_valid",
+  "mode" => "apply_if_valid",
   "operations" => [%{"op" => "..."}]
 }
 ```
 
 Draft repair replaces `base_revision` with `draft` and `draft_version`. A
-request cannot provide both. `operations` is always a non-empty list and is
-bounded by count and total source bytes.
+request cannot provide both. `operations` is a bounded non-empty list except
+when `apply_if_valid` applies an unchanged ready draft; that request omits the
+list and reuses the already qualified candidate.
 
-Implement `commit` values `if_valid` and `draft_only`. No operation stages or
-commits Git changes.
+Require `mode` with values `apply_if_valid` and `draft_only`.
+`apply_if_valid` qualifies once and atomically updates the working tree when
+valid; `draft_only` qualifies and retains a ready draft while leaving the
+working tree unchanged. No operation stages or commits Git changes.
 
 ## Required entity representation
 
@@ -209,11 +237,15 @@ validate request and operations
 -> isolated format, read-back, compile, and tests
 -> if invalid: persist diagnostics and return needs_changes
 -> if valid and draft_only: return ready draft
--> if valid and if_valid: verify base hashes
+-> if valid and apply_if_valid: verify base hashes
 -> short SQLite transaction plus atomic source projection writes
 -> read back source and compare semantic signatures
 -> commit or restore every source byte and roll back
 ```
+
+Repeated identical unresolved facts are deduplicated before persistence. This
+keeps unsupported source honest while preventing several occurrences of the
+same frontier fact from colliding in semantic evidence storage.
 
 Never persist accepted semantic facts for a draft that has not committed.
 
@@ -245,7 +277,9 @@ TwoRavens.Change.SourceBundle       multi-module parsing and splitting
 TwoRavens.Change.Projector          entity-to-module source projection
 TwoRavens.Change.Patch              exact bounded entity patching
 TwoRavens.SemanticStore.Drafts      persistence through store facade
-TwoRavens.MCP.Change                decoded-map transport adapter only
+TwoRavens.MCP.Server                project-bound STDIO JSON-RPC transport
+TwoRavens.MCP.Change                decoded-map change adapter
+TwoRavens.MCP.Context               decoded-map batched context adapter
 ```
 
 Keep parsing, graph derivation, request validation, operation application, and
@@ -263,17 +297,17 @@ boundaries. No change-domain module calls Exqlite directly.
    commit without resending original fragments.
 7. **Lifecycle:** delete, rename, and move while preserving or retiring stable
    identities and reporting unresolved references.
-8. **Transport:** round-trip the documented JSON-shaped map through the MCP
-   handler and compact receipt.
-9. **Probe:** reproduce the prior Epic 1 feature with materially fewer agent
-   operations and no direct application-source access.
+8. **Transport:** round-trip initialize, list, batched context, change, and
+   retained-draft selection through a real STDIO MCP process.
+9. **Probe:** reproduce the frozen feature through real MCP with materially
+   fewer agent operations and no direct application-source access.
 
 Each checkpoint leaves Scope 01 and Scope 02 tests passing.
 
 ## Out of scope
 
 - General unmanaged brownfield repository indexing or watching
-- A full STDIO/HTTP MCP server or plugin packaging
+- HTTP MCP transport or plugin packaging
 - Custom macros, source annotations, or a `.ravens` programming language
 - Caller-supplied relations, intent, risk, or invariant metadata
 - Whole-existing-module merge or replacement
@@ -330,6 +364,14 @@ files-only or prior-probe baseline.
 ## Completion gate
 
 Status: not yet met.
+
+The first measured MCP probe was unfavorable. Its blockers are now fixed:
+discriminated operation schemas are advertised, qualified ready drafts apply
+directly, request retries are idempotent, grouped aliases resolve, duplicate
+unresolved evidence is safe, and a fresh-process regression plus live probe
+prove the intended one-context, one-change, one-qualification path. The
+remaining completion gaps listed above and the files-only token gap keep this
+scope open.
 
 This scope is complete when:
 

@@ -394,24 +394,15 @@ defmodule TwoRavens.Source.Parser do
     entries
     |> Enum.flat_map(fn
       {:alias, _meta, [alias_ast | options]} ->
-        with {:ok, full} <- Syntax.alias_name(alias_ast),
-             {:ok, short} <- alias_short_name(full, List.flatten(options)) do
-          [{short, full}]
-        else
-          _ -> []
+        case Syntax.static_aliases(alias_ast, options) do
+          {:ok, aliases} -> aliases
+          :error -> []
         end
 
       _other ->
         []
     end)
     |> Map.new()
-  end
-
-  defp alias_short_name(full, options) do
-    case Keyword.get(options, :as) do
-      nil -> {:ok, full |> String.split(".") |> List.last()}
-      as_ast -> Syntax.alias_name(as_ast)
-    end
   end
 
   defp imports(entries) do

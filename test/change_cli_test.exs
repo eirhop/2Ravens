@@ -19,6 +19,18 @@ defmodule TwoRavens.ChangeCLITest do
     %{mix: mix, root: root}
   end
 
+  test "guide is compact, accurate, and available without a project root", %{mix: mix} do
+    assert {guide, 0} = System.cmd(mix, ["ravens", "guide"], stderr_to_stdout: true)
+    assert guide =~ ~s("mode":"apply_if_valid")
+    assert guide =~ "draft_only: qualify and retain a ready draft"
+    assert guide =~ "edit existing code by exact entity only"
+    assert guide =~ "no intent or relationship fields"
+    assert byte_size(guide) < 1_600
+
+    assert {help, 0} = System.cmd(mix, ["ravens", "change", "--help"], stderr_to_stdout: true)
+    assert help == guide
+  end
+
   test "change request file and draft context are callable across CLI processes", %{
     mix: mix,
     root: root
@@ -26,6 +38,7 @@ defmodule TwoRavens.ChangeCLITest do
     request_path = Path.join(System.tmp_dir!(), "ravens-request-#{System.unique_integer()}.json")
 
     request = %{
+      "mode" => "apply_if_valid",
       "operations" => [
         %{
           "op" => "create",
@@ -93,6 +106,7 @@ defmodule TwoRavens.ChangeCLITest do
     request_path = Path.join(System.tmp_dir!(), "ravens-request-#{System.unique_integer()}.json")
 
     request = %{
+      "mode" => "apply_if_valid",
       "operations" => [
         %{
           "op" => "create",

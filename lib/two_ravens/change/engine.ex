@@ -19,22 +19,54 @@ defmodule TwoRavens.Change.Engine do
   alias TwoRavens.Qualification.Evidence
   alias TwoRavens.Qualifier
   alias TwoRavens.Qualifier.Result
+  alias TwoRavens.Selection
   alias TwoRavens.Semantic.Revision
   alias TwoRavens.SemanticStore
   alias TwoRavens.Source
   alias TwoRavens.Source.Clause
   alias TwoRavens.Source.Comparison
   alias TwoRavens.Source.Function
+  alias TwoRavens.Source.Test
 
   @spec run(Project.t(), map()) :: {:ok, Receipt.t()} | {:error, map()}
   def run(%Project{} = project, request) do
+    case replay(project, request) do
+      {:ok, %Receipt{} = receipt} -> {:ok, receipt}
+      {:ok, nil} -> run_new(project, request)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp run_new(
+         %Project{} = project,
+         %{base: {:draft, _id, _version}, mode: :apply_if_valid, operations: []} = request
+       ) do
+    with {:ok, state} <- starting_state(project, request.base),
+         :ok <- ready_to_apply(state.draft) do
+      finish(project, state.draft, :apply_if_valid, request.returns, request)
+    end
+  end
+
+  defp run_new(%Project{} = project, request) do
     with {:ok, state} <- starting_state(project, request.base),
          {:ok, transformed} <- apply_operations(state, request.operations),
          {:ok, projected} <- project_new_modules(transformed),
          {:ok, draft} <-
-           persist_candidate(project, projected, request.operations, request.commit) do
-      finish(project, draft, request.commit)
+           persist_candidate(project, projected, request.operations, request.mode) do
+      finish(project, draft, request.mode, request.returns, request)
     end
+  end
+
+  defp replay(_project, %{request_id: nil}), do: {:ok, nil}
+
+  defp replay(project, %{request_id: request_id, request_hash: request_hash}) do
+    SemanticStore.accepted_request(project, request_id, request_hash)
+  end
+
+  defp ready_to_apply(%Draft{status: :ready}), do: :ok
+
+  defp ready_to_apply(%Draft{id: id, version: version, status: status}) do
+    {:error, %{code: :draft_not_ready, draft: id, version: version, status: status}}
   end
 
   defp starting_state(project, {:revision, expected}) do
@@ -201,7 +233,9 @@ defmodule TwoRavens.Change.Engine do
 
   defp apply_operation(state, %{"op" => "patch"} = operation) do
     with {:ok, entity} <- EntitySource.locate(state.graph, state.files, operation["target"]),
+         :ok <- patch_allowed(entity),
          {:ok, fragment} <- Patch.apply(entity.source, operation["diff"], operation["hash"]),
+         :ok <- validate_patched_entity(entity, fragment),
          {:ok, files} <- EntitySource.replace_fragment(state.files, entity, fragment) do
       {:ok, %{state | files: files}}
     end
@@ -243,6 +277,21 @@ defmodule TwoRavens.Change.Engine do
     move_entity(state, operation)
   end
 
+  defp patch_allowed(%{kind: :module}),
+    do: {:error, %{code: :whole_module_patch_not_allowed}}
+
+  defp patch_allowed(%{kind: kind}) when kind in [:function, :clause, :module_form, :test],
+    do: :ok
+
+  defp validate_patched_entity(%{kind: :test}, fragment) do
+    case EntitySource.validate_test(fragment) do
+      {:ok, %Test{}} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp validate_patched_entity(_entity, _fragment), do: :ok
+
   defp rebuild(state) do
     with {:ok, graph} <- Source.rebuild_with(state.project, state.manifest, state.files) do
       {:ok, %{state | graph: graph}}
@@ -256,11 +305,11 @@ defmodule TwoRavens.Change.Engine do
     end
   end
 
-  defp persist_candidate(project, state, operations, commit) do
+  defp persist_candidate(project, state, operations, mode) do
     draft =
       draft_value(state, operations, :ready, [], nil)
 
-    with {:ok, qualified} <- qualify(state, commit),
+    with {:ok, qualified} <- qualify(state, mode),
          ready <- update_qualified_draft(draft, state, qualified),
          {:ok, persisted} <- SemanticStore.put_draft(project, ready) do
       {:ok, persisted}
@@ -271,26 +320,57 @@ defmodule TwoRavens.Change.Engine do
     end
   end
 
-  defp qualify(state, commit) do
+  defp qualify(state, mode) do
     changed = changed_files(state.before_files, state.files)
-    profile = if commit == :if_valid, do: :apply, else: :qualified_dry_run
+    profile = if mode == :apply_if_valid, do: :apply, else: :qualified_dry_run
     Qualifier.qualify(state.project, state.manifest, changed, state.graph, profile)
   end
 
-  defp finish(_project, %Draft{status: :needs_changes} = draft, _commit) do
-    {:ok, receipt(draft, :needs_changes, false, nil)}
+  defp finish(project, %Draft{status: :needs_changes} = draft, _mode, selectors, _request) do
+    with {:ok, selected} <- select(project, draft, selectors) do
+      {:ok, receipt(draft, :needs_changes, false, nil, selected)}
+    end
   end
 
-  defp finish(_project, %Draft{} = draft, :draft_only) do
-    {:ok, receipt(draft, :ready, false, nil)}
+  defp finish(project, %Draft{} = draft, :draft_only, selectors, _request) do
+    with {:ok, selected} <- select(project, draft, selectors) do
+      {:ok, receipt(draft, :ready, false, nil, selected)}
+    end
   end
 
-  defp finish(project, %Draft{} = draft, :if_valid) do
+  defp finish(project, %Draft{} = draft, :apply_if_valid, selectors, request) do
     with {:ok, graph} <- Source.rebuild_with(project, draft.manifest, draft.files),
-         {:ok, candidate} <- candidate(project, draft, graph),
-         {:ok, applied} <- Materializer.apply(candidate) do
-      applied_receipt = receipt(draft, :applied, true, revision_id(applied.graph))
+         {:ok, selected} <- Selection.resolve(graph, draft.files, selectors),
+         revision <- revision_id(graph),
+         applied_receipt <- receipt(draft, :applied, true, revision, selected),
+         accepted_request <- accepted_request(request, applied_receipt),
+         {:ok, candidate} <- candidate(project, draft, graph, accepted_request),
+         {:ok, _applied} <- apply_candidate(candidate) do
       {:ok, clean_up_draft(project, draft.id, applied_receipt)}
+    end
+  end
+
+  defp apply_candidate(candidate) do
+    case Materializer.apply(candidate) do
+      {:error, %{code: :apply_failed} = error} ->
+        {:error, Map.put(error, :working_tree_changed, false)}
+
+      result ->
+        result
+    end
+  end
+
+  defp accepted_request(%{request_id: nil}, _receipt), do: nil
+
+  defp accepted_request(request, receipt) do
+    %{id: request.request_id, hash: request.request_hash, receipt: receipt}
+  end
+
+  defp select(_project, _draft, []), do: {:ok, []}
+
+  defp select(project, draft, selectors) do
+    with {:ok, graph} <- Source.rebuild_with(project, draft.manifest, draft.files) do
+      Selection.resolve(graph, draft.files, selectors)
     end
   end
 
@@ -305,7 +385,7 @@ defmodule TwoRavens.Change.Engine do
     end
   end
 
-  defp candidate(project, draft, graph) do
+  defp candidate(project, draft, graph, accepted_request) do
     changed = changed_files(draft.before_files, draft.files)
 
     case graph.nodes |> Map.keys() |> Enum.sort() |> List.first() do
@@ -323,7 +403,10 @@ defmodule TwoRavens.Change.Engine do
           manifest: draft.manifest,
           manifest_hash: draft.manifest_hash,
           graph: graph,
-          details: %{operation_count: length(draft.operations)},
+          details: %{
+            operation_count: length(draft.operations),
+            accepted_request: accepted_request
+          },
           semantic: %{subject: subject, intent: nil, intent_kind: :change_reason, targets: []}
         }
 
@@ -375,7 +458,7 @@ defmodule TwoRavens.Change.Engine do
     }
   end
 
-  defp receipt(draft, status, changed?, revision) do
+  defp receipt(draft, status, changed?, revision, selected) do
     %Receipt{
       status: status,
       operation_count: length(draft.operations),
@@ -387,8 +470,16 @@ defmodule TwoRavens.Change.Engine do
       qualification: draft.qualification,
       affected_paths: map_size(changed_files(draft.before_files, draft.files)),
       diagnostics: draft.diagnostics,
+      selected: selected,
+      selected_from: selected_from(draft, status, revision),
       working_tree_changed: changed?
     }
+  end
+
+  defp selected_from(_draft, :applied, revision), do: %{revision: revision}
+
+  defp selected_from(draft, _status, _revision) do
+    %{draft: draft.id, draft_version: draft.version}
   end
 
   defp entity_counts(operations) do
@@ -423,13 +514,21 @@ defmodule TwoRavens.Change.Engine do
     collision =
       Enum.find(modules, fn module ->
         Map.has_key?(state.graph.nodes, Identity.module(module.module)) or
-          Map.has_key?(state.files, module.path) or
+          candidate_path_collision?(state, module.path) or
           unmanaged_path_exists?(state.project, module.path)
       end)
 
     if collision,
       do: {:error, %{code: :module_collision, module: collision.module}},
       else: :ok
+  end
+
+  defp candidate_path_collision?(state, path) do
+    case Map.fetch(state.files, path) do
+      {:ok, nil} -> not MapSet.member?(state.new_paths, path)
+      {:ok, _source} -> true
+      :error -> false
+    end
   end
 
   defp unmanaged_path_exists?(project, path) do
@@ -470,6 +569,19 @@ defmodule TwoRavens.Change.Engine do
   end
 
   defp replace_allowed(%{kind: :module_form}, text, _graph), do: one_form(text)
+
+  defp replace_allowed(%{kind: :test, id: id, name: name}, text, _graph) do
+    case EntitySource.validate_test(text, name) do
+      {:ok, %Test{}} ->
+        :ok
+
+      {:error, %{code: :replacement_identity_mismatch} = reason} ->
+        {:error, Map.put(reason, :target, id)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 
   defp parse_function_id(id) do
     case Regex.run(~r/^function:.+\.([a-z_][A-Za-z0-9_!?]*)\/(\d+)$/, id) do
@@ -557,7 +669,7 @@ defmodule TwoRavens.Change.Engine do
   end
 
   defp delete_entity(state, %{kind: kind} = entity, _operation)
-       when kind in [:function, :clause, :module_form] do
+       when kind in [:function, :clause, :module_form, :test] do
     with {:ok, files} <- EntitySource.delete_fragment(state.files, entity) do
       {:ok, %{state | files: files}}
     end

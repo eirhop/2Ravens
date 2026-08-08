@@ -16,6 +16,7 @@ defmodule Mix.Tasks.Ravens do
       mix ravens draft-context DRAFT VERSION FOCUS --root PATH
       mix ravens revision --root PATH
       mix ravens entities --root PATH
+      mix ravens guide
   """
 
   alias TwoRavens.Authoring
@@ -34,7 +35,8 @@ defmodule Mix.Tasks.Ravens do
     include: :string,
     compact: :boolean,
     details: :boolean,
-    request: :string
+    request: :string,
+    help: :boolean
   ]
 
   @impl Mix.Task
@@ -43,14 +45,17 @@ defmodule Mix.Tasks.Ravens do
 
     if invalid != [], do: Mix.raise("invalid options: #{inspect(invalid)}")
 
-    root = Keyword.get(options, :root) || Mix.raise("--root is required")
+    if Keyword.get(options, :help, false) or command in [["guide"], ["help"]] do
+      Mix.shell().info(CLI.guide())
+    else
+      root = Keyword.get(options, :root) || Mix.raise("--root is required")
+      result = dispatch(command, root, options)
 
-    result = dispatch(command, root, options)
-
-    case result do
-      {:ok, value, formatter} -> Mix.shell().info(formatter.(value))
-      {:ok, value} -> Mix.shell().info(inspect(value))
-      {:error, reason} -> Mix.raise(CLI.error(reason))
+      case result do
+        {:ok, value, formatter} -> Mix.shell().info(formatter.(value))
+        {:ok, value} -> Mix.shell().info(inspect(value))
+        {:error, reason} -> Mix.raise(CLI.error(reason))
+      end
     end
   end
 

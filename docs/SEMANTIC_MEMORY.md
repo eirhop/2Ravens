@@ -18,6 +18,14 @@ context. The store therefore remains bounded infrastructure, while the next
 experiment reduces authoring round trips through the
 [entity authoring API](ENTITY_AUTHORING.md).
 
+The first 2026-08-08 entity-authoring lifecycle did not reach cumulative
+break-even: Ravens used 54.1% more total tokens. After Scope 04 fixed discovery
+and recovery ergonomics, the final paired
+[lifecycle](../benchmarks/entity_authoring/lifecycle_luna_2026-08-08.md) used
+48.4% fewer total tokens than files. Neither probe validates the revised
+semantic-memory hypothesis below: both tested source-derived authoring context,
+not durable facts that source cannot reconstruct.
+
 ## Revised product hypothesis
 
 > Authoring-time semantic memory can preserve knowledge that source indexing

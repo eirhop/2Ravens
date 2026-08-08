@@ -87,14 +87,13 @@ coverage.
 
 ## Public request envelope
 
-The transport-neutral request is JSON-shaped and maps directly to one future
-MCP tool named `ravens_change`:
+The transport-neutral request is JSON-shaped and maps directly to the
+`ravens_change` MCP tool:
 
 ```json
 {
-  "root": ".",
   "base_revision": "r_42",
-  "commit": "if_valid",
+  "mode": "apply_if_valid",
   "operations": [
     {"op": "create", "kind": "function", "parent": "module:Shop.Pricing", "text": "..."},
     {"op": "replace", "target": "function:Shop.Total.calculate/1", "text": "..."}
@@ -102,9 +101,9 @@ MCP tool named `ravens_change`:
 }
 ```
 
-The `operations` value is always a list, including for one operation. This
-keeps one schema, permits atomic batching without changing shape, and costs
-negligible input compared with source text.
+The `operations` value is a non-empty list, including for one operation. The
+only exception is applying an unchanged ready draft: omit `operations` because
+its candidate has already qualified.
 
 Operations execute in list order. Later operations see earlier draft changes.
 They never observe a partial working-tree apply.
@@ -112,26 +111,59 @@ They never observe a partial working-tree apply.
 `base_revision` binds the request to the source/store revision. It is required
 for edits and optional only when initializing an empty managed project.
 
-`commit` supports:
+`mode` is required and supports:
 
-- `"if_valid"`: qualify and commit in the same request when every operation is
-  valid; otherwise retain a repairable draft.
-- `"draft_only"`: validate and cache without touching the working tree.
+- `"apply_if_valid"`: qualify once and atomically update the working tree when
+  every operation is valid; otherwise retain a repairable draft.
+- `"draft_only"`: qualify and retain a ready draft without touching the working
+  tree. It is the explicit review-first mode.
+
+Neither mode stages or commits Git changes. There is no implicit default: the
+caller must make the working-tree choice explicitly.
+
+An apply request may include a bounded idempotency key:
+
+```json
+{
+  "request_id": "epic-2.tax-policy:v1",
+  "mode": "apply_if_valid",
+  "operations": [{"op": "create", "kind": "source_bundle", "text": "..."}]
+}
+```
+
+Accepted results are stored atomically with their semantic revision. Repeating
+the exact request returns its recorded receipt without qualifying again.
+Reusing the ID for different input returns `request_id_conflict`. Replaying it
+after a later accepted revision returns `request_id_stale` rather than claiming
+that the earlier result is still current.
 
 To repair a retained draft, use the same request shape with `draft` and its
 current version:
 
 ```json
 {
-  "root": ".",
   "draft": "d_73",
   "draft_version": 1,
-  "commit": "if_valid",
+  "mode": "apply_if_valid",
   "operations": [
     {"op": "patch", "target": "function:Shop.Pricing.total/2", "diff": "..."}
   ]
 }
 ```
+
+To apply a ready `draft_only` result unchanged, refer to the qualified version
+without resending its source or adding a fake operation:
+
+```json
+{
+  "draft": "d_73",
+  "draft_version": 1,
+  "mode": "apply_if_valid"
+}
+```
+
+When a request asks for returned selections, `selected_from` identifies either
+the accepted revision or the draft ID/version used to resolve them.
 
 ## Operations
 
@@ -364,15 +396,28 @@ field.
 ## MCP boundary
 
 MCP is transport only. The first implementation exposes a decoded-map handler
-with the same validation and return values as the public Elixir API. A local
-STDIO server may later map its `tools/call` request directly to that handler
-without redefining operations.
+and a project-bound local STDIO server with the same validation and return
+values as the public Elixir API. Run it with `mix ravens.mcp --root PATH`; tool
+calls omit the root. See [Local MCP server](MCP.md).
 
 Large Elixir remains one string per entity operation. The JSON envelope contains
 only operation identity and safety fields. Context queries and mutation
 receipts stay compact and never return the whole draft unless requested.
+The optional `return` list uses the same strict `{focus, include}` selectors as
+`ravens_context`, so post-change verification needs no second round trip.
 
 ## Local CLI transport
+
+Print the complete compact agent workflow, accepted modes, operation names,
+and context fields without opening a project:
+
+```powershell
+mix ravens guide
+```
+
+`mix ravens --help` and `mix ravens change --help` return the same guide. Agents
+should consult it once rather than discovering the schema through rejected
+requests.
 
 The same request can be submitted from a local agent without shell-escaping the
 embedded Elixir. Write the JSON object to a temporary file outside the managed
@@ -407,6 +452,18 @@ mix ravens revision --root PATH
 mix ravens entities --root PATH
 mix ravens context function:MODULE.name/arity --root PATH --for-edit
 ```
+
+For the fewest round trips, query the revision and entity list once, request
+`--for-edit` only for existing entities that will change, batch dependent
+operations in order, and submit one `source_bundle` for entirely new modules.
+Do not request or submit intent or relationship metadata. If qualification
+returns `needs_changes`, query only the failing draft entity and repair the
+retained draft instead of reconstructing the original request.
+
+The supported ordinary-expression subset includes sequential local bindings
+with supported literal, pattern, arithmetic, local-call, and explicit
+remote-call expressions. Readable code such as `net = Pricing.total(...)`
+remains readable and still contributes derived call relationships.
 
 ## Required safety behavior
 

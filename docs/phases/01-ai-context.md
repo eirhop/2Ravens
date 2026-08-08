@@ -173,9 +173,9 @@ MCP server: two_ravens
 MCP tool:   context
 ```
 
-Implement the Mix task first for development, diagnostics, and benchmarks.
-After the contract stabilizes, add a thin local STDIO MCP adapter as the
-preferred agent surface. The server may remain alive and keep the graph warm.
+The Mix task supports development, diagnostics, and benchmarks. The thin local
+STDIO MCP adapter is the preferred agent surface and remains bound to one
+project root.
 
 ## Delivery milestones
 

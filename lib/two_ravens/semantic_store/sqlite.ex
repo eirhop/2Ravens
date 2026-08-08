@@ -3,6 +3,8 @@ defmodule TwoRavens.SemanticStore.SQLite do
 
   alias Exqlite.Sqlite3
   alias TwoRavens.Change.Draft
+  alias TwoRavens.Change.Receipt
+  alias TwoRavens.Change.RequestAttempt
   alias TwoRavens.Project
   alias TwoRavens.Repository
   alias TwoRavens.Semantic.Entity
@@ -144,6 +146,7 @@ defmodule TwoRavens.SemanticStore.SQLite do
              operation,
              snapshot.revision
            ),
+         :ok <- insert_accepted_request(connection, candidate, snapshot.revision.id),
          {:ok, stored_signature} <- stored_signature(connection, snapshot.revision.id),
          true <- stored_signature == Projection.signature(graph) do
       {:ok,
@@ -157,6 +160,83 @@ defmodule TwoRavens.SemanticStore.SQLite do
     else
       false -> {:error, %{code: :stored_graph_mismatch}}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc false
+  @spec accepted_request(connection(), String.t(), String.t()) ::
+          {:ok, Receipt.t() | nil} | {:error, map()}
+  def accepted_request(connection, request_id, request_hash) do
+    with {:ok, rows} <-
+           query(
+             connection,
+             """
+             SELECT request_hash, result_revision_id, receipt, receipt_hash
+             FROM accepted_change_requests WHERE request_id = ?
+             """,
+             [request_id]
+           ) do
+      load_accepted_request(connection, rows, request_id, request_hash)
+    end
+  end
+
+  @doc false
+  @spec put_request_attempt(connection(), RequestAttempt.t()) ::
+          {:ok, RequestAttempt.t()} | {:error, map()}
+  def put_request_attempt(connection, %RequestAttempt{} = attempt) do
+    transaction(connection, fn connection ->
+      with :ok <- delete_expired_request_attempts(connection),
+           {:ok, [[latest]]} <-
+             query(
+               connection,
+               "SELECT COALESCE(MAX(version), 0) FROM change_request_attempts WHERE attempt_id = ?",
+               [attempt.id]
+             ),
+           :ok <- verify_attempt_append(latest, attempt),
+           {:ok, payload} <- RequestAttempt.encode_storage(attempt),
+           :ok <-
+             execute_bound(
+               connection,
+               """
+               INSERT INTO change_request_attempts(
+                 attempt_id, version, expires_at, payload, payload_hash, created_at
+               ) VALUES (?, ?, ?, ?, ?, ?)
+               """,
+               [
+                 attempt.id,
+                 attempt.version,
+                 attempt.expires_at,
+                 {:blob, payload},
+                 Repository.hash(payload),
+                 attempt.created_at
+               ]
+             ) do
+        {:ok, attempt}
+      end
+    end)
+  end
+
+  @doc false
+  @spec get_request_attempt(connection(), String.t(), pos_integer()) ::
+          {:ok, RequestAttempt.t()} | {:error, map()}
+  def get_request_attempt(connection, id, version) do
+    with {:ok, [[latest]]} <-
+           query(
+             connection,
+             "SELECT COALESCE(MAX(version), 0) FROM change_request_attempts WHERE attempt_id = ?",
+             [id]
+           ),
+         :ok <- verify_attempt_version(latest, id, version),
+         {:ok, rows} <-
+           query(
+             connection,
+             """
+             SELECT payload, payload_hash, expires_at
+             FROM change_request_attempts WHERE attempt_id = ? AND version = ?
+             """,
+             [id, version]
+           ) do
+      load_request_attempt_row(rows, id, version)
     end
   end
 
@@ -291,6 +371,25 @@ defmodule TwoRavens.SemanticStore.SQLite do
   defp verify_draft_version(latest, id, version),
     do: {:error, %{code: :stale_draft_version, draft: id, version: version, latest: latest}}
 
+  defp verify_attempt_append(latest, %RequestAttempt{version: version})
+       when latest == version - 1,
+       do: :ok
+
+  defp verify_attempt_append(latest, %RequestAttempt{id: id, version: version}) do
+    {:error,
+     %{code: :stale_request_attempt_version, attempt: id, version: version, latest: latest}}
+  end
+
+  defp verify_attempt_version(0, id, version),
+    do: {:error, %{code: :request_attempt_not_found, attempt: id, version: version}}
+
+  defp verify_attempt_version(version, _id, version), do: :ok
+
+  defp verify_attempt_version(latest, id, version) do
+    {:error,
+     %{code: :stale_request_attempt_version, attempt: id, version: version, latest: latest}}
+  end
+
   @doc false
   @spec delete_draft(connection(), String.t()) :: :ok | {:error, map()}
   def delete_draft(connection, id) do
@@ -325,6 +424,52 @@ defmodule TwoRavens.SemanticStore.SQLite do
 
   defp load_draft_row(_rows, id, version),
     do: {:error, %{code: :draft_corrupt, draft: id, version: version}}
+
+  defp load_request_attempt_row([], id, version),
+    do: {:error, %{code: :request_attempt_not_found, attempt: id, version: version}}
+
+  defp load_request_attempt_row([[payload, hash, expires_at]], id, version) do
+    cond do
+      byte_size(payload) > 1_200_000 ->
+        {:error, %{code: :request_attempt_corrupt, attempt: id, version: version}}
+
+      expired?(expires_at) ->
+        {:error, %{code: :request_attempt_expired, attempt: id, version: version}}
+
+      Repository.hash(payload) != hash ->
+        {:error, %{code: :request_attempt_corrupt, attempt: id, version: version}}
+
+      true ->
+        with {:ok, decoded} <- Jason.decode(payload),
+             {:ok, %RequestAttempt{id: ^id, version: ^version} = attempt} <-
+               RequestAttempt.load(decoded, hash, payload) do
+          {:ok, attempt}
+        else
+          _other ->
+            {:error, %{code: :request_attempt_corrupt, attempt: id, version: version}}
+        end
+    end
+  rescue
+    _error -> {:error, %{code: :request_attempt_corrupt, attempt: id, version: version}}
+  end
+
+  defp load_request_attempt_row(_rows, id, version),
+    do: {:error, %{code: :request_attempt_corrupt, attempt: id, version: version}}
+
+  defp delete_expired_request_attempts(connection) do
+    execute_bound(
+      connection,
+      "DELETE FROM change_request_attempts WHERE expires_at < ?",
+      [DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()]
+    )
+  end
+
+  defp expired?(expires_at) do
+    case DateTime.from_iso8601(expires_at) do
+      {:ok, parsed, 0} -> DateTime.compare(parsed, DateTime.utc_now()) == :lt
+      _other -> true
+    end
+  end
 
   defp ensure_parent(path) do
     case File.mkdir_p(Path.dirname(path)) do
@@ -730,7 +875,9 @@ defmodule TwoRavens.SemanticStore.SQLite do
   end
 
   defp insert_unresolved_evidence(connection, unsupported, revision_id, origin) do
-    Enum.reduce_while(unsupported, :ok, fn reason, :ok ->
+    unsupported
+    |> Enum.uniq()
+    |> Enum.reduce_while(:ok, fn reason, :ok ->
       result =
         insert_evidence(
           connection,
@@ -880,6 +1027,105 @@ defmodule TwoRavens.SemanticStore.SQLite do
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
+  end
+
+  defp insert_accepted_request(_connection, %{details: %{accepted_request: nil}}, _revision_id),
+    do: :ok
+
+  defp insert_accepted_request(
+         connection,
+         %{
+           details: %{
+             accepted_request: %{
+               id: request_id,
+               hash: request_hash,
+               receipt: %Receipt{} = receipt
+             }
+           }
+         },
+         revision_id
+       ) do
+    payload = Receipt.dump(receipt)
+    payload_hash = Repository.hash(payload)
+
+    with {:ok, existing} <- accepted_request(connection, request_id, request_hash) do
+      case existing do
+        nil ->
+          execute_bound(
+            connection,
+            """
+            INSERT INTO accepted_change_requests(
+              request_id, request_hash, result_revision_id, receipt, receipt_hash, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+              request_id,
+              request_hash,
+              revision_id,
+              {:blob, payload},
+              payload_hash,
+              DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+            ]
+          )
+
+        %Receipt{} ->
+          :ok
+      end
+    end
+  end
+
+  defp insert_accepted_request(_connection, _candidate, _revision_id), do: :ok
+
+  defp load_accepted_request(_connection, [], _request_id, _request_hash), do: {:ok, nil}
+
+  defp load_accepted_request(
+         connection,
+         [[request_hash, result_revision, payload, payload_hash]],
+         request_id,
+         request_hash
+       ) do
+    with {:ok, current} <- current_revision(connection),
+         :ok <- verify_request_revision(current, result_revision, request_id),
+         :ok <- verify_receipt_payload(payload, payload_hash) do
+      Receipt.load(payload)
+    end
+  end
+
+  defp load_accepted_request(
+         _connection,
+         [[_stored_hash, _result_revision, _payload, _payload_hash]],
+         request_id,
+         _request_hash
+       ) do
+    {:error, %{code: :request_id_conflict, request_id: request_id}}
+  end
+
+  defp load_accepted_request(_connection, _rows, _request_id, _request_hash),
+    do: {:error, %{code: :accepted_request_corrupt}}
+
+  defp verify_request_revision(%{id: revision}, revision, _request_id), do: :ok
+
+  defp verify_request_revision(current, result_revision, request_id) do
+    {:error,
+     %{
+       code: :request_id_stale,
+       request_id: request_id,
+       result_revision: result_revision,
+       current_revision: if(current, do: current.id, else: nil)
+     }}
+  end
+
+  defp verify_receipt_payload(payload, payload_hash) do
+    cond do
+      byte_size(payload) > 1_000_000 ->
+        {:error, %{code: :accepted_request_corrupt}}
+
+      Repository.hash(payload) != payload_hash ->
+        {:error, %{code: :accepted_request_corrupt}}
+
+      true ->
+        :ok
+    end
   end
 
   defp insert_evidence(
@@ -1180,19 +1426,40 @@ defmodule TwoRavens.SemanticStore.SQLite do
   defp sqlite_error(reason) do
     diagnostic = reason |> inspect() |> String.downcase()
 
-    code =
-      cond do
-        String.contains?(diagnostic, "constraint") ->
-          :semantic_store_constraint
+    error = constraint_error(diagnostic) || availability_error(diagnostic)
 
-        String.contains?(diagnostic, "busy") or String.contains?(diagnostic, "locked") ->
-          :semantic_store_busy
+    {:error, error}
+  end
 
-        true ->
-          :semantic_store_error
-      end
+  defp constraint_error(diagnostic) do
+    cond do
+      String.contains?(diagnostic, "semantic_relations.identity_key") ->
+        %{code: :semantic_store_constraint, constraint: :duplicate_semantic_relation}
 
-    {:error, %{code: code}}
+      String.contains?(diagnostic, "semantic_evidence.identity_key") ->
+        %{code: :semantic_store_constraint, constraint: :duplicate_semantic_evidence}
+
+      String.contains?(diagnostic, "source_projections.node_id") ->
+        %{code: :semantic_store_constraint, constraint: :duplicate_source_projection}
+
+      String.contains?(diagnostic, "foreign key constraint") ->
+        %{code: :semantic_store_constraint, constraint: :missing_semantic_reference}
+
+      String.contains?(diagnostic, "check constraint") ->
+        %{code: :semantic_store_constraint, constraint: :invalid_semantic_value}
+
+      String.contains?(diagnostic, "constraint") ->
+        %{code: :semantic_store_constraint, constraint: :unknown}
+
+      true ->
+        nil
+    end
+  end
+
+  defp availability_error(diagnostic) do
+    if String.contains?(diagnostic, "busy") or String.contains?(diagnostic, "locked"),
+      do: %{code: :semantic_store_busy},
+      else: %{code: :semantic_store_error}
   end
 
   defp dump_reason(nil), do: nil

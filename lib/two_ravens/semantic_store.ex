@@ -4,6 +4,8 @@ defmodule TwoRavens.SemanticStore do
   alias TwoRavens.AtomicFile
   alias TwoRavens.Authoring.Candidate
   alias TwoRavens.Change.Draft
+  alias TwoRavens.Change.Receipt
+  alias TwoRavens.Change.RequestAttempt
   alias TwoRavens.Manifest
   alias TwoRavens.Project
   alias TwoRavens.SemanticStore.Reconciliation
@@ -91,6 +93,45 @@ defmodule TwoRavens.SemanticStore do
     case SQLite.with_database(project, &delete_draft_from_connection(&1, id)) do
       {:ok, :deleted} -> :ok
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc false
+  @spec accepted_request(Project.t(), String.t(), String.t()) ::
+          {:ok, Receipt.t() | nil} | {:error, map()}
+  def accepted_request(%Project{} = project, request_id, request_hash)
+      when is_binary(request_id) and is_binary(request_hash) do
+    with {:ok, manifest} <- Manifest.load(project),
+         :ok <- ensure_gitignore(project) do
+      SQLite.with_database(
+        project,
+        &accepted_request_from_connection(&1, project, manifest, request_id, request_hash)
+      )
+    end
+  end
+
+  @doc false
+  @spec put_request_attempt(Project.t(), RequestAttempt.t()) ::
+          {:ok, RequestAttempt.t()} | {:error, map()}
+  def put_request_attempt(%Project{} = project, %RequestAttempt{} = attempt) do
+    with :ok <- ensure_gitignore(project) do
+      SQLite.with_database(project, &SQLite.put_request_attempt(&1, attempt))
+    end
+  end
+
+  @doc false
+  @spec get_request_attempt(Project.t(), String.t(), pos_integer()) ::
+          {:ok, RequestAttempt.t()} | {:error, map()}
+  def get_request_attempt(%Project{} = project, id, version)
+      when is_binary(id) and is_integer(version) and version > 0 do
+    with :ok <- ensure_gitignore(project) do
+      SQLite.with_database(project, &SQLite.get_request_attempt(&1, id, version))
+    end
+  end
+
+  defp accepted_request_from_connection(connection, project, manifest, request_id, request_hash) do
+    with {:ok, _freshness} <- Reconciliation.ensure_current(connection, project, manifest) do
+      SQLite.accepted_request(connection, request_id, request_hash)
     end
   end
 

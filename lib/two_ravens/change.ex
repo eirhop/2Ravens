@@ -5,6 +5,8 @@ defmodule TwoRavens.Change do
   alias TwoRavens.Change.Error
   alias TwoRavens.Change.Receipt
   alias TwoRavens.Change.Request
+  alias TwoRavens.Change.RequestAttempt
+  alias TwoRavens.Change.RequestPatch
   alias TwoRavens.Graph
   alias TwoRavens.Manifest
   alias TwoRavens.Project
@@ -14,22 +16,41 @@ defmodule TwoRavens.Change do
   alias TwoRavens.Source.Function
   alias TwoRavens.Source.Module
 
-  @doc "Submits one strictly validated ordered entity-authoring request."
+  @doc "Submits one ordered entity-authoring request and retains a bounded repair attempt."
   @spec submit(Path.t(), map()) :: {:ok, Receipt.t()} | {:error, Error.t()}
-  def submit(root, request) when is_binary(root) do
-    with {:ok, validated} <- Request.validate(request),
-         {:ok, project} <- Project.open(root),
-         {:ok, _freshness} <- SemanticStore.synchronize(root),
-         {:ok, receipt} <- Engine.run(project, validated) do
-      {:ok, receipt}
+  def submit(root, request) when is_binary(root) and is_map(request) do
+    with {:ok, project} <- Project.open(root),
+         {:ok, attempt} <- RequestAttempt.new(request),
+         {:ok, attempt} <- SemanticStore.put_request_attempt(project, attempt) do
+      run_attempt(project, attempt)
     else
       {:error, %Error{} = error} -> {:error, error}
       {:error, reason} -> {:error, Error.from(reason)}
     end
   end
 
+  def submit(root, request) when is_binary(root),
+    do: {:error, Error.from(%{code: :invalid_request, reason: %{request: request}})}
+
   def submit(root, _request),
     do: {:error, Error.from(%{code: :invalid_arguments, reason: %{root: root}})}
+
+  @doc "Retries an immutable retained request version using a bounded JSON Patch subset."
+  @spec retry(Path.t(), String.t(), pos_integer(), [map()]) ::
+          {:ok, Receipt.t()} | {:error, Error.t()}
+  def retry(root, attempt_id, version, patch)
+      when is_binary(root) and is_binary(attempt_id) and is_integer(version) and version > 0 do
+    with {:ok, project} <- Project.open(root),
+         {:ok, attempt} <- SemanticStore.get_request_attempt(project, attempt_id, version) do
+      retry_attempt(project, attempt, patch)
+    else
+      {:error, %Error{} = error} -> {:error, error}
+      {:error, reason} -> {:error, Error.from(reason)}
+    end
+  end
+
+  def retry(_root, _attempt_id, _version, _patch),
+    do: {:error, Error.from(%{code: :invalid_arguments})}
 
   @doc "Returns the exact current semantic revision for a managed project."
   @spec current_revision(Path.t()) :: {:ok, String.t()} | {:error, Error.t()}
@@ -105,5 +126,42 @@ defmodule TwoRavens.Change do
     else
       {:error, reason} -> {:error, Error.from(reason)}
     end
+  end
+
+  defp run_attempt(project, %RequestAttempt{} = attempt) do
+    with {:ok, validated} <- Request.validate(attempt.payload),
+         {:ok, _freshness} <- SemanticStore.synchronize(project.root),
+         {:ok, receipt} <- Engine.run(project, validated) do
+      {:ok, receipt}
+    else
+      {:error, %Error{} = error} -> {:error, error}
+      {:error, reason} -> {:error, reason |> attach_attempt(attempt) |> Error.from()}
+    end
+  end
+
+  defp retry_attempt(project, attempt, patch) do
+    with {:ok, request} <- RequestPatch.apply(attempt.payload, patch),
+         {:ok, next} <- RequestAttempt.next(attempt, request),
+         {:ok, next} <- SemanticStore.put_request_attempt(project, next) do
+      run_attempt(project, next)
+    else
+      {:error, %Error{} = error} -> {:error, error}
+      {:error, reason} -> {:error, reason |> attach_attempt(attempt) |> Error.from()}
+    end
+  end
+
+  defp attach_attempt(%{code: _code} = reason, attempt) do
+    reason
+    |> Map.put(:attempt, attempt.id)
+    |> Map.put(:attempt_version, attempt.version)
+  end
+
+  defp attach_attempt(reason, attempt) do
+    %{
+      code: :change_failed,
+      reason: reason,
+      attempt: attempt.id,
+      attempt_version: attempt.version
+    }
   end
 end

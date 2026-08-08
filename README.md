@@ -46,10 +46,14 @@ boundaries.
 
 ## Status
 
-The greenfield authoring and persistent semantic-memory MVPs are implemented.
-Their safety and persistence gates passed, but their efficiency comparisons
-were unfavorable. The
-[entity-based batch authoring MVP](docs/scopes/03-entity-authoring-mvp.md) now
-has a working first vertical slice: one repairable request edits exact semantic
-entities and qualifies once while ordinary source remains recoverable. Its
-completion gate and comparative agent probe remain open.
+The greenfield authoring, persistent semantic-memory, and entity-based batch
+authoring foundations are implemented. Scope 04 adds flat project-bound MCP
+tools, canonical discovery, batched exact context, same-call proof, retained
+request repair, and first-class test editing while ordinary source remains
+authoritative and recoverable.
+
+The final frozen three-job Luna lifecycle used 48.4% fewer total tokens, 45.5%
+fewer tool wrappers, and 38.4% less wall time than the paired files condition.
+Both conditions completed correctly. This reverses the earlier unfavorable
+probe, but the replication gate remains open; see the
+[recorded lifecycle](benchmarks/entity_authoring/lifecycle_luna_2026-08-08.md).

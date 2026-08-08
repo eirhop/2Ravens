@@ -3,6 +3,8 @@ defmodule TwoRavens.SourceGraphTest do
 
   alias TwoRavens.Graph
   alias TwoRavens.Repository
+  alias TwoRavens.Selection
+  alias TwoRavens.Selector
   alias TwoRavens.Source
 
   @pricing """
@@ -108,6 +110,137 @@ defmodule TwoRavens.SourceGraphTest do
            ]
 
     assert unsupported.unsupported == ["unsupported function body expression"]
+  end
+
+  test "grouped and renamed static aliases resolve managed calls" do
+    source = """
+    defmodule Shop.AliasedCheckout do
+      alias Shop.{Checkout, Pricing}
+      alias Shop.Pricing, as: Prices
+
+      def checkout(subtotal, tier), do: Checkout.checkout(subtotal, tier)
+      def total(subtotal, tier), do: Pricing.total(subtotal, tier)
+      def renamed(subtotal, tier), do: Prices.total(subtotal, tier)
+    end
+    """
+
+    {:ok, pricing} = Source.parse("lib/shop/pricing.ex", @pricing)
+    {:ok, checkout} = Source.parse("lib/shop/checkout.ex", @checkout)
+    assert {:ok, aliased} = Source.parse("lib/shop/aliased_checkout.ex", source)
+    assert aliased.unsupported == []
+
+    assert {:ok, graph} =
+             Graph.build([pricing, checkout, aliased], Repository.revision("missing", %{}))
+
+    assert graph.unsupported == []
+
+    assert Graph.callees(graph, "function:Shop.AliasedCheckout.checkout/2") == [
+             "function:Shop.Checkout.checkout/2"
+           ]
+
+    for name <- ["renamed", "total"] do
+      assert Graph.callees(graph, "function:Shop.AliasedCheckout.#{name}/2") == [
+               "function:Shop.Pricing.total/2"
+             ]
+    end
+
+    call_edges = Enum.filter(graph.edges, &(&1.kind == :calls))
+
+    assert length(call_edges) == 5
+    assert length(Enum.uniq_by(call_edges, &{&1.kind, &1.from, &1.to, &1.source})) == 5
+  end
+
+  test "dynamic aliases remain explicit unknown" do
+    for {name, alias_expression} <- [
+          {"DynamicAlias", "Module.concat(Shop, Pricing)"},
+          {"ModuleRelativeAlias", "__MODULE__.Pricing"}
+        ] do
+      source = """
+      defmodule Shop.#{name} do
+        alias #{alias_expression}
+        def total(subtotal, tier), do: Pricing.total(subtotal, tier)
+      end
+      """
+
+      assert {:ok, fragment} = Source.parse("lib/shop/#{Macro.underscore(name)}.ex", source)
+      assert "unsupported top-level alias" in fragment.unsupported
+
+      assert {:ok, graph} =
+               Graph.build([fragment], Repository.revision("missing", %{}))
+
+      assert Enum.any?(
+               graph.unsupported,
+               &String.contains?(&1, "unresolved call Pricing.total/2")
+             )
+    end
+  end
+
+  test "module test selection returns bounded identities, names, and derived targets" do
+    sources = [
+      {"lib/shop/pricing.ex", @pricing},
+      {"lib/shop/checkout.ex", @checkout},
+      {"test/shop/pricing_test.exs", @tests}
+    ]
+
+    fragments = Enum.map(sources, fn {path, source} -> elem(Source.parse(path, source), 1) end)
+    files = Map.new(sources)
+    assert {:ok, graph} = Graph.build(fragments, Repository.revision("missing", %{}))
+
+    assert {:ok, selectors} =
+             Selector.validate([
+               %{"focus" => "module:Shop.PricingTest", "include" => ["tests"]}
+             ])
+
+    assert {:ok,
+            [
+              %{
+                focus: "module:Shop.PricingTest",
+                tests: [
+                  %{
+                    focus: "test:Shop.PricingTest:" <> _fingerprint,
+                    name: "prices checkout",
+                    targets: targets,
+                    total_targets: 3,
+                    targets_truncated: false
+                  }
+                ],
+                total_tests: 1,
+                truncated: false
+              }
+            ]} = Selection.resolve(graph, files, selectors)
+
+    assert targets == [
+             "function:Shop.Checkout.checkout/2",
+             "function:Shop.Pricing.discount/2",
+             "function:Shop.Pricing.total/2"
+           ]
+  end
+
+  test "local bindings preserve readable bodies and derived calls" do
+    tax_source = """
+    defmodule Shop.Tax do
+      def tax_cents(subtotal, _region), do: div(subtotal * 25, 100)
+    end
+    """
+
+    source = """
+    defmodule Shop.Totals do
+      def calculate(subtotal, region) do
+        tax = Shop.Tax.tax_cents(subtotal, region)
+        gross = subtotal + tax
+        {subtotal, tax, gross}
+      end
+    end
+    """
+
+    assert {:ok, fragment} = Source.parse("lib/shop/totals.ex", source)
+    assert fragment.unsupported == []
+    assert {:ok, tax} = Source.parse("lib/shop/tax.ex", tax_source)
+    assert {:ok, graph} = Graph.build([tax, fragment], Repository.revision("missing", %{}))
+
+    assert Graph.callees(graph, "function:Shop.Totals.calculate/2") == [
+             "function:Shop.Tax.tax_cents/2"
+           ]
   end
 
   test "unresolved calls are explicit graph uncertainty" do

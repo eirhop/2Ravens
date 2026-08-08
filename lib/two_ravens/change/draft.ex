@@ -103,6 +103,7 @@ defmodule TwoRavens.Change.Draft do
     with :ok <- exact_keys(payload, dump_keys()),
          {:ok, manifest} <- load_manifest(payload["manifest"]),
          {:ok, status} <- load_status(payload["status"]),
+         {:ok, qualification} <- load_qualification(payload["qualification"]),
          :ok <- validate_loaded(payload),
          :ok <- validate_operations(payload["operations"]) do
       {:ok,
@@ -119,7 +120,7 @@ defmodule TwoRavens.Change.Draft do
          operations: payload["operations"],
          status: status,
          diagnostics: payload["diagnostics"],
-         qualification: payload["qualification"],
+         qualification: qualification,
          expires_at: payload["expires_at"]
        }}
     end
@@ -167,6 +168,41 @@ defmodule TwoRavens.Change.Draft do
   defp load_status("ready"), do: {:ok, :ready}
   defp load_status("needs_changes"), do: {:ok, :needs_changes}
   defp load_status(_status), do: {:error, %{code: :draft_corrupt}}
+
+  defp load_qualification(nil), do: {:ok, nil}
+
+  defp load_qualification(
+         %{
+           "format" => format,
+           "compile" => compile,
+           "tests" => tests,
+           "commands" => commands,
+           "output_bytes" => output_bytes
+         } = qualification
+       )
+       when map_size(qualification) == 5 and is_integer(commands) and commands >= 0 and
+              is_integer(output_bytes) and output_bytes >= 0 do
+    with {:ok, format} <- load_evidence_status(format),
+         {:ok, compile} <- load_evidence_status(compile),
+         {:ok, tests} <- load_evidence_status(tests) do
+      {:ok,
+       %{
+         format: format,
+         compile: compile,
+         tests: tests,
+         commands: commands,
+         output_bytes: output_bytes
+       }}
+    end
+  end
+
+  defp load_qualification(_qualification), do: {:error, %{code: :draft_corrupt}}
+
+  defp load_evidence_status("pass"), do: {:ok, :pass}
+  defp load_evidence_status("fail"), do: {:ok, :fail}
+  defp load_evidence_status("unknown"), do: {:ok, :unknown}
+  defp load_evidence_status("not_run"), do: {:ok, :not_run}
+  defp load_evidence_status(_status), do: {:error, %{code: :draft_corrupt}}
 
   defp validate_operations(operations) do
     operations

@@ -8,7 +8,7 @@ phases built on the same semantic evidence graph:
 ```text
 MVP 1: greenfield semantic authoring — implemented
 MVP 2: persistent semantic memory — implemented; gate failed
-MVP 3: entity-based batch authoring — first vertical slice implemented
+MVP 3: entity-based batch authoring — implemented; replication gate open
 Phase 1: possible execution
 Phase 2: changed possibilities
 Phase 3: observed execution
@@ -19,16 +19,16 @@ before product development moves to the next.
 
 ## Current status
 
-**Entity-based batch authoring MVP under qualification**
+**Agent-native entity authoring under replication**
 
 Scope 01 proved safe source materialization. Scope 02 implemented local
 semantic memory, but its frozen lifecycle remained larger than source-indexed
-context. A live agent probe then showed that semantic creation works while
-function-at-a-time commands create excessive round trips. A first batch API now
-submits ordered entity operations once, retains compiler-invalid drafts for
-repair, and qualifies one atomic candidate. The next work is to close the
-remaining [Scope 03 gaps](scopes/03-entity-authoring-mvp.md#status) and run the
-reproducible comparative agent probe.
+context. A batch API now submits ordered entity operations once, retains
+invalid requests and compiler-invalid drafts for repair, and qualifies one
+atomic candidate. Scope 04 adds flat MCP tools, canonical discovery, tolerant
+bounded selectors, same-call proof, and exact test editing. Its first final
+paired lifecycle beat files on tokens, calls, and wall time. The next gate is
+independent repetition, not broader infrastructure.
 
 ## MVP foundation 1 — managed semantic authoring
 
@@ -126,8 +126,12 @@ Milestones:
 The API deliberately excludes whole-existing-module merge, custom macros,
 caller-supplied relations, and speculative metadata.
 
-Status: first vertical slice implemented; completion gate and comparative probe
-remain open.
+Status: implemented through Scope 04. The final
+[three-job lifecycle](../benchmarks/entity_authoring/lifecycle_luna_2026-08-08.md)
+completed correctly and used 48.4% fewer total tokens, 45.5% fewer wrappers,
+and 38.4% less wall time than files. Treat that as a successful frozen probe,
+not a general efficiency theorem. The remaining gate is repetition across
+fresh paired lifecycles before advancing the product phase.
 
 ## Preparation — contract and benchmark
 

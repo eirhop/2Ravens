@@ -5,6 +5,36 @@ defmodule TwoRavens.CLI do
   alias TwoRavens.Change.Receipt
   alias TwoRavens.Context.Result
 
+  @spec guide() :: String.t()
+  def guide do
+    """
+    workflow
+      1 mix ravens revision --root PATH
+      2 mix ravens entities --root PATH
+      3 mix ravens context FOCUS --root PATH --for-edit
+      4 write one temporary JSON request outside PATH
+      5 mix ravens change --root PATH --request REQUEST.json
+      6 if needs_changes: draft-context, then repair that draft only
+    request
+      {"base_revision":"revision:r_...","mode":"apply_if_valid","operations":[...]}
+      repair: replace base_revision with draft and draft_version
+    mode
+      draft_only: qualify and retain a ready draft; working tree stays unchanged
+      apply_if_valid: qualify once and apply atomically when valid; otherwise retain a draft
+      neither mode stages or commits Git changes
+    operations
+      create source_bundle|function|clause|module_form; replace; patch; set; delete; rename; move
+      bundle complete new modules; edit existing code by exact entity only
+    context include
+      callers,callees,tests,evidence,source,clauses,editable
+      --for-edit includes source, clauses, editables, callers, and tests
+    rules
+      batch dependent operations; never resend a retained bundle; no intent or relationship fields
+    """
+    |> String.trim()
+    |> with_output_bytes()
+  end
+
   @spec decode_change(String.t()) :: {:ok, map()} | {:error, map()}
   def decode_change(source) when is_binary(source) do
     case Jason.decode(source) do
@@ -25,6 +55,7 @@ defmodule TwoRavens.CLI do
         count_line("entities", receipt.entities),
         count_line("relationships", receipt.relationships),
         qualification_line(receipt.qualification),
+        selected_from_line(receipt),
         "affected_paths #{receipt.affected_paths}",
         "working_tree #{if(receipt.working_tree_changed, do: "changed", else: "unchanged")}"
       ] ++ Enum.map(receipt.diagnostics || [], &"diagnostic #{compact_inspect(&1)}")
@@ -98,6 +129,11 @@ defmodule TwoRavens.CLI do
 
   defp optional_line(_label, nil), do: nil
   defp optional_line(label, value), do: "#{label} #{value}"
+
+  defp selected_from_line(%Receipt{selected: selected}) when selected in [nil, []], do: nil
+
+  defp selected_from_line(%Receipt{selected_from: source}),
+    do: "selected_from #{compact_inspect(source)}"
 
   defp count_line(label, values) when values in [nil, %{}], do: "#{label} none"
 

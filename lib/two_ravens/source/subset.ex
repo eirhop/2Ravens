@@ -35,7 +35,13 @@ defmodule TwoRavens.Source.Subset do
   def top_level({:use, _meta, [{:__aliases__, _, [:ExUnit, :Case]} | _options]}),
     do: :supported
 
-  def top_level({:alias, _meta, [{:__aliases__, _, _parts} | _options]}), do: :supported
+  def top_level({:alias, _meta, [alias_ast | options]}) do
+    case Syntax.static_aliases(alias_ast, options) do
+      {:ok, _aliases} -> :supported
+      :error -> {:unsupported, "unsupported top-level alias"}
+    end
+  end
+
   def top_level({:import, _meta, [{:__aliases__, _, _parts} | _options]}), do: :supported
 
   def top_level({:@, _meta, [{:moduledoc, _inner_meta, [value]}]})
@@ -109,6 +115,12 @@ defmodule TwoRavens.Source.Subset do
        do: true
 
   defp valid_expression?(values) when is_list(values), do: Enum.all?(values, &valid_expression?/1)
+
+  defp valid_expression?({:__block__, _meta, expressions}),
+    do: Enum.all?(expressions, &valid_expression?/1)
+
+  defp valid_expression?({:=, _meta, [pattern, expression]}),
+    do: valid_pattern?(pattern) and valid_expression?(expression)
 
   defp valid_expression?({name, _meta, context}) when is_atom(name) and is_atom(context),
     do: true

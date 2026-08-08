@@ -96,6 +96,16 @@ defmodule TwoRavens.Graph do
     |> Enum.sort()
   end
 
+  @doc "Returns statically derived function targets for one test identity."
+  @spec test_targets(t(), String.t()) :: [String.t()]
+  def test_targets(graph, test_id) do
+    graph.edges
+    |> Enum.filter(&(&1.kind == :tested_by and &1.to == test_id))
+    |> Enum.map(& &1.from)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
   @doc "Returns a range-insensitive semantic signature used for round-trip checks."
   @spec semantic_signature(t()) :: term()
   def semantic_signature(graph) do

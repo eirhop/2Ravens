@@ -13,6 +13,8 @@ Start with these documents:
 - [Entity authoring API](ENTITY_AUTHORING.md) defines ordered entity operations,
   cached drafts, clause ownership, and source projection for the next authoring
   experiment.
+- [Local MCP server](MCP.md) defines project binding, tool calls, shared
+  selectors, and output limits for agent use.
 - [Authoring-time semantic memory](SEMANTIC_MEMORY.md) defines the revised
   hypothesis, fact classes, lifecycle benchmark, and decision gate.
 - [Roadmap](ROADMAP.md) records the order of work and the gate between phases.
@@ -30,6 +32,7 @@ Implementation starts from bounded development scopes:
 1. [Greenfield semantic authoring MVP — implemented](scopes/01-greenfield-authoring-mvp.md)
 2. [Persistent semantic memory MVP — implemented](scopes/02-semantic-memory-mvp.md)
 3. [Entity-based batch authoring MVP — first vertical slice](scopes/03-entity-authoring-mvp.md)
+4. [Agent authoring ergonomics and lossless recovery — implemented](scopes/04-agent-authoring-ergonomics.md)
 
 ## Document boundaries
 

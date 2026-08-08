@@ -322,14 +322,14 @@ label an uncompiled candidate as validated.
 
 ## MCP boundary
 
-MCP remains a transport, not the change model. The CLI and any future MCP tool
+MCP remains a transport, not the change model. The CLI and MCP tools
 must call the same ordinary Elixir API.
 
-The initial MVP did not add an MCP write tool. Scope 03 defines one decoded-map
-handler shaped for a future `ravens_change` tool:
+Scope 03 exposes a decoded-map handler and project-bound local STDIO
+`ravens_change` tool:
 
 ```text
-change(root, base_revision | draft, commit, operations)
+change(root, base_revision | draft, mode, operations)
 ```
 
 The model supplies an ordered operation list. The MCP host supplies the JSON-RPC
@@ -341,7 +341,7 @@ without resending accepted fragments.
 Example model arguments for adding one function:
 
 ```json
-{"base_revision":"r1","commit":"if_valid","operations":[{"op":"create","kind":"function","parent":"module:RavensShop.Pricing","text":"def total(subtotal, tier), do: subtotal - discount(subtotal, tier)"}]}
+{"base_revision":"r1","mode":"apply_if_valid","operations":[{"op":"create","kind":"function","parent":"module:RavensShop.Pricing","text":"def total(subtotal, tier), do: subtotal - discount(subtotal, tier)"}]}
 ```
 
 The complete operation, clause, draft, and projection contract is in

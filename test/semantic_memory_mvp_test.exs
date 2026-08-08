@@ -272,7 +272,7 @@ defmodule TwoRavens.SemanticMemoryMVPTest do
   test "migrations are idempotent and unsupported newer schemas fail closed", %{root: root} do
     assert {:ok, _manifest} = Authoring.init(root)
     assert {:ok, _manifest} = Authoring.init(root)
-    assert {:ok, 2} = SemanticStore.schema_version(root)
+    assert {:ok, 4} = SemanticStore.schema_version(root)
 
     path = Path.join(root, ".ravens/semantic.sqlite3")
     assert {:ok, connection} = Sqlite3.open(path)
@@ -282,7 +282,7 @@ defmodule TwoRavens.SemanticMemoryMVPTest do
 
     assert :ok = Sqlite3.close(connection)
 
-    assert {:error, %{code: :unsupported_semantic_schema, found: 999, supported: 2}} =
+    assert {:error, %{code: :unsupported_semantic_schema, found: 999, supported: 4}} =
              SemanticStore.schema_version(root)
   end
 
